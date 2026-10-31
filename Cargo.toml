@@ -1,0 +1,17 @@
+[package]
+name = "rustorm"
+version = "0.1.0"
+edition = "2021"
+description = "Rust-first schema and typed query foundation"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = []
+postgres = []
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "rustorm"
+path = "src/main.rs"

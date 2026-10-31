@@ -1,0 +1,17 @@
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "rustorm-client"
+  output = "../src/generated/rustorm"
+}
+
+model User {
+  id Int @id @default(autoincrement())
+  email String @unique
+  name String?
+  published Boolean @default(false)
+  @@map("users")
+}
