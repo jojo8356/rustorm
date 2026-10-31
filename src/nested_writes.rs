@@ -178,7 +178,7 @@ pub(crate) fn execute_nested_set_ext<P, C, K, L>(tx: &mut crate::postgres::Trans
             match tx.query(&pq)?.len() { 1=>(), 0=> return Err(Error::RelationNotFound), _=> return Err(Error::RelationAmbiguous) }
             let locked = CompiledQuery { sql: format!("SELECT {} FROM {} WHERE {} = $1 FOR UPDATE", quote(key), quote(rel.child_table), quote(rel.child_key)), params: vec![plan.parent.clone()] };
             let existing_rows = tx.query(&locked)?; if existing_rows.len() > NestedSetExt::<P,C,K,L>::MAX_TARGETS { return Err(Error::InvalidInput("existing-link limit exceeded")); }
-            if plan.targets_scalar.is_empty() && !existing_rows.is_empty() { return Err(Error::InvalidInput("cannot clear mandatory relation")); }
+            if plan.targets_scalar.is_empty() { return Err(Error::InvalidInput("cannot clear mandatory relation")); }
             // vérifie que tout existant est dans la cible sinon détachement requis
             for r in &existing_rows {
                 let v: L = r.get(key)?; let ev = crate::query::IntoFieldValue::into_value(v);
