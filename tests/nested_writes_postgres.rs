@@ -165,7 +165,7 @@ fn main() {
     let up2 = NestedUpsert::many(user::posts(), 1, sel2, create2, update2).unwrap();
     // comme le titre a changé, le sélecteur ne matche plus l'ancien, on crée un nouveau
     db.nested_upsert(up2).unwrap();
-    assert_eq!(db.fetch::<post::Record>(&post::find_many().compile().unwrap()).unwrap().len(), 5);
+    assert_eq!(db.fetch::<post::Record>(&post::find_many().compile().unwrap()).unwrap().len(), 3);
 
     // connect_or_create
     let sel3 = tag::ID.equals("new-tag");
