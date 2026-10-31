@@ -210,7 +210,7 @@ fn main() {
     let mut graph3 = NestedGraph::new();
     graph3.add_create(user::create().set(user::ID, 40)).unwrap();
     let sel_up = post::TITLE.equals("graph-up");
-    graph3.add_upsert("posts", sel_up, post::create().set(post::ID, 300).set(post::TITLE, "graph-up"), post::update_many().set(post::TITLE, "graph-up2")).unwrap();
+    graph3.add_upsert("posts", sel_up, post::create().set(post::ID, 300).set(post::TITLE, "graph-up").set(post::AUTHOR_ID, 40), post::update_many().set(post::TITLE, "graph-up2")).unwrap();
     graph3.validate().unwrap();
     db.nested_graph(graph3).unwrap();
     // vérifie trigger refusé (on crée un trigger et on tente une opération)
