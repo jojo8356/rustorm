@@ -139,7 +139,7 @@ fn main() {
     // clés composées
     let comp_rel = user::composite_items();
     let f = rustorm::query::Filter::and(vec![composite_item::ID.equals(1), composite_item::LANG.equals("fr")]);
-    let plan_comp = NestedSetExt::many_composite(comp_rel, 1, vec![f]).unwrap();
+    let plan_comp: NestedSetExt<user::Record, composite_item::Record, i32, i32> = NestedSetExt::many_composite(comp_rel, 1, vec![f]).unwrap();
     db.nested_set_ext(plan_comp).unwrap();
     let rows = db.fetch::<composite_item::Record>(&composite_item::find_many().compile().unwrap()).unwrap();
     assert_eq!(rows.iter().filter(|r| r.owner_id==Some(1)).count(), 1);
