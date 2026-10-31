@@ -201,7 +201,8 @@ fn main() {
     graph2.add_create(user::create().set(user::ID, 30)).unwrap();
     // update ambigu (plusieurs lignes) doit rollback
     graph2.add_update("posts", post::ID.gte(10), post::update_many().set(post::TITLE, "bad")).unwrap();
-    assert!(matches!(db.nested_graph(graph2), Err(Error::RelationAmbiguous)));
+    let res2 = db.nested_graph(graph2);
+    assert!(matches!(res2, Err(Error::RelationAmbiguous)), "graph2 expected RelationAmbiguous got {:?}", res2);
     let quser = user::find_many().where_(user::ID.equals(30)).compile().unwrap();
     assert!(db.fetch::<user::Record>(&quser).unwrap().is_empty(), "rollback multi-level doit annuler création parent");
 
