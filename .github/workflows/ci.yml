@@ -106,6 +106,10 @@ jobs:
               echo "::notice::PASSED $t"
             fi
           done
+      - name: Diagnostic lib unit tests
+        if: always()
+        continue-on-error: true
+        run: cargo test --locked --offline --lib -- --nocapture 2>&1 | tail -n 50; echo "LIB_EXIT:${PIPESTATUS[0]}"
       - name: Test without optional connector
         run: cargo test --locked --offline
       - name: Test with connector enabled
