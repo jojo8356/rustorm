@@ -131,7 +131,7 @@ fn main() {
     let plan_req2 = NestedSetExt::many_required(user::required_posts(), 1, required_post::ID, vec![21]).unwrap();
     db.nested_set_ext(plan_req2).unwrap();
     let qreq = required_post::find_many().where_(required_post::ID.equals(21)).compile().unwrap();
-    assert_eq!(db.fetch::<required_post::Record>(&qreq).unwrap()[0].author_id, 1);
+    assert_eq!(db.fetch::<required_post::Record>(&qreq).unwrap()[0].author_id, Some(1));
     // tentative de détachement sur FK obligatoire -> refus
     let plan_detach = NestedSetExt::many_required(user::required_posts(), 1, required_post::ID, vec![]).unwrap();
     assert!(matches!(db.nested_set_ext(plan_detach), Err(Error::InvalidInput(_))));
