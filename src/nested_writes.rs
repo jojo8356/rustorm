@@ -309,13 +309,11 @@ pub(crate) fn execute_nested_upsert<P, C, K>(tx: &mut crate::postgres::Transacti
                 let q = plan.update.where_(plan.selector.clone()).where_(Filter::atom(rel.child_table, rel.child_key, crate::query::FilterOp::Compare("=", plan.parent.clone()))).compile().map_err(|_| Error::InvalidInput("invalid update"))?;
                 tx.execute(&q)?;
             } else {
-                let q = plan.create.clone().compile().map_err(|_| Error::InvalidInput("invalid create"))?;
-                // inject FK
+                // inject FK via nested_child (adds placeholder NULL that is replaced by parent)
                 let mut q2 = plan.create.nested_child(rel.child_table, rel.child_key).map_err(|_| Error::InvalidInput("invalid create"))?;
                 // replace placeholder
                 if let Some(slot) = q2.params.iter().position(|v| matches!(v, Value::Null)) { q2.params[slot] = plan.parent.clone(); }
                 tx.execute(&q2)?;
-                let _ = q;
             }
             Ok(())
         },
