@@ -50,13 +50,20 @@ jobs:
         run: ls -la /tmp | head -n 50
       - name: Test annotation
         run: echo "::error file=tests/p1_m5_completion.rs,line=1::TEST ANNOTATION FROM CI"
-      - name: Diagnostic double run
+      - name: Diagnostic flaky loop
         if: always()
         run: |
-          echo "FIRST RUN"
-          cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/first.txt || { echo "::error file=tests/p1_m5_completion.rs,line=1::FIRST FAILED"; grep -E "FAILED|failures:" /tmp/first.txt | head -n 5; exit 1; }
-          echo "SECOND RUN"
-          cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/second.txt || { echo "::error file=tests/p1_m5_completion.rs,line=1::SECOND FAILED"; grep -E "FAILED|failures:" /tmp/second.txt | head -n 20; cat /tmp/second.txt | tail -n 30; exit 1; }
+          for i in 1 2 3 4 5; do
+            echo "RUN $i"
+            cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/run_$i.txt
+            status=${PIPESTATUS[0]}
+            echo "RUN $i EXIT:$status"
+            if [ $status -ne 0 ]; then
+              echo "::error file=tests/p1_m5_completion.rs,line=1::RUN $i FAILED"
+              grep -E "FAILED|failures:" /tmp/run_$i.txt | head -n 10
+            fi
+          done
+          echo "DONE LOOP"
       - name: Test without optional connector
         run: cargo test --locked --offline -- --test-threads=1
       - name: Test with connector enabled
