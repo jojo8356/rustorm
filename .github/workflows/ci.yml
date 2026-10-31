@@ -33,6 +33,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install libpq development files
         run: sudo apt-get update && sudo apt-get install -y libpq-dev
+      - name: Diagnostic list offline tests
+        run: cargo test --locked --offline -- --list 2>&1 | head -n 100
+      - name: Diagnostic check p1_m5
+        run: cargo test --locked --offline --test p1_m5_completion -- --list 2>&1 | head -n 100
       - name: Test without optional connector
         run: cargo test --locked --offline
       - name: Test with connector enabled
