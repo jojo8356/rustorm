@@ -48,6 +48,8 @@ jobs:
       - name: Diagnostic ls tmp after first
         if: always()
         run: ls -la /tmp | head -n 50
+      - name: Test annotation
+        run: echo "::error file=tests/p1_m5_completion.rs,line=1::TEST ANNOTATION FROM CI"
       - name: Diagnostic double run
         if: always()
         run: |
