@@ -33,10 +33,7 @@ impl Drop for Cleanup {
 #[test]
 #[ignore = "requires disposable PostgreSQL and CREATEDB privilege"]
 fn relational_initial_migration_enforces_fk_and_actions() {
-    let port = std::env::var("RUSTORM_TEST_DATABASE_PORT")
-        .unwrap()
-        .parse()
-        .unwrap();
+    let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5432);
     let user = std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
     let database =
         std::env::var("RUSTORM_TEST_DATABASE_NAME").unwrap_or_else(|_| "postgres".into());
@@ -231,7 +228,7 @@ fn relational_initial_migration_enforces_fk_and_actions() {
     fs::write(consumer.join("src/generated.rs"), schema::generate(&parsed)).unwrap();
     fs::write(consumer.join("src/main.rs"), r#"mod generated;
 fn main() {
- let port=std::env::var("RUSTORM_TEST_DATABASE_PORT").unwrap().parse().unwrap();
+ let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5432);
  let user=std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
  let dbname=std::env::var("RUSTORM_REL_TEST_DB").unwrap();
  let mut db=rustorm::postgres::Connection::connect_local_unencrypted(port,&user,&dbname).unwrap();
@@ -248,6 +245,9 @@ fn main() {
         .current_dir(&consumer)
         .args(["run", "--offline", "--quiet"])
         .env("RUSTORM_REL_TEST_DB", &name)
+            .env("RUSTORM_TEST_DATABASE_PORT", port.to_string())
+            .env("RUSTORM_TEST_DATABASE_USER", &user)
+            .env("RUSTORM_TEST_DATABASE_NAME", &database)
         .output()
         .unwrap();
     assert!(

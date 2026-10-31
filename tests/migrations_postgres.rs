@@ -21,10 +21,7 @@ impl Drop for Temp {
     }
 }
 fn connection() -> Connection {
-    let port = std::env::var("RUSTORM_TEST_DATABASE_PORT")
-        .expect("RUSTORM_TEST_DATABASE_PORT")
-        .parse()
-        .unwrap();
+    let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5432);
     let user = std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
     let db = std::env::var("RUSTORM_TEST_DATABASE_NAME").unwrap_or_else(|_| "postgres".into());
     Connection::connect_local_unencrypted(port, &user, &db).unwrap()
@@ -238,7 +235,7 @@ fn migrations_lifecycle_against_real_postgres() {
     assert!(cli(&["migrate", "create", "--name", "initial"])
         .status
         .success());
-    let port = std::env::var("RUSTORM_TEST_DATABASE_PORT").unwrap();
+    let port = std::env::var("RUSTORM_TEST_DATABASE_PORT").unwrap_or_else(|_| "5432".into());
     let user = std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
     let database =
         std::env::var("RUSTORM_TEST_DATABASE_NAME").unwrap_or_else(|_| "postgres".into());
