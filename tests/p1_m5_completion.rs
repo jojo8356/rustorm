@@ -38,6 +38,7 @@ fn fk_composite_ddl_has_two_refs() {
     let src = format!("{} model P {{ id Int @id sec String @unique vals Val[] @@id([id, sec]) }} model Val {{ id Int @id p1 Int p2 String p P @relation(fields: [p1, p2], references: [id, sec], onDelete: Restrict, onUpdate: Cascade) }}", header());
     let schema = parse(&src).unwrap();
     let sql = rustorm::migrations::initial_sql(&schema).unwrap();
+    eprintln!("SQL for fk_composite_ddl_has_two_refs: {}", sql);
     assert!(sql.contains("FOREIGN KEY"), "sql: {sql}");
     // should contain both local cols
     assert!(sql.contains("p1") && sql.contains("p2"), "sql: {sql}");
