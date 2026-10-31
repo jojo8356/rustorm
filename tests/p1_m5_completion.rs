@@ -196,39 +196,22 @@ fn migrate_split_sql_rejects_transaction_control() {
 #[test]
 fn migrate_load_and_create_tempdir() {
     let dir = std::env::temp_dir().join(format!(
-        "rustorm-m5-{}-{}-{:?}-{}",
+        "rustorm-m5-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos(),
-        std::thread::current().id(),
-        {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            let mut h = DefaultHasher::new();
-            std::thread::current().id().hash(&mut h);
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos().hash(&mut h);
-            h.finish()
-        }
+            .as_nanos()
     ));
     std::fs::create_dir_all(&dir).unwrap();
     let src = format!("{} model T {{ id Int @id x String }}", header());
     let s = parse(&src).unwrap();
-    let unique_name = format!("init-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
-    let p = rustorm::migrations::create(&dir, &unique_name, &s).expect("create");
+    let p = rustorm::migrations::create(&dir, "init", &s).expect("create");
     assert!(p.exists());
     let loaded = rustorm::migrations::load(&dir).unwrap();
     assert_eq!(loaded.len(), 1);
-    assert!(loaded[0].name.contains(&unique_name));
+    assert!(loaded[0].name.contains("init"));
     let _ = std::fs::remove_dir_all(&dir);
-}
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut h = DefaultHasher::new();
-    std::thread::current().id().hash(&mut h);
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos().hash(&mut h);
-    h.finish()
 }
 
 // ---------- INTROSPECTION ----------
