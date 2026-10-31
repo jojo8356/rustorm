@@ -130,6 +130,14 @@ jobs:
         if: always()
         continue-on-error: true
         run: cargo test --locked --offline --lib --tests -- --nocapture 2>&1 | tail -n 30; echo "LIB_TESTS:${PIPESTATUS[0]}"
+      - name: Diagnostic bins plus tests
+        if: always()
+        continue-on-error: true
+        run: cargo test --locked --offline --tests --bins -- --nocapture 2>&1 | tail -n 30; echo "BINS_TESTS:${PIPESTATUS[0]}"
+      - name: Diagnostic lib bins tests
+        if: always()
+        continue-on-error: true
+        run: cargo test --locked --offline --lib --bins --tests -- --nocapture 2>&1 | tail -n 30; echo "ALL_BINS:${PIPESTATUS[0]}"
       - name: Test without optional connector
         run: cargo test --locked --offline
       - name: Test with connector enabled
