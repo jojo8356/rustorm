@@ -7,7 +7,7 @@ use rustorm::query::{Field, Select, Aggregate, StringQueryMode};
 use std::marker::PhantomData;
 
 fn header() -> String {
-    "datasource db { provider = \"postgresql\" url = env(\"DATABASE_URL\") } generator client { provider = \"rustorm-client\" output = \"../src/generated/rustorm\" } ".to_string()
+    "datasource db { provider = \"postgresql\" url = env(\"DATABASE_URL\") } generator client { provider = \"rustorm-client\" output = \"./src/generated/rustorm\" } ".to_string()
 }
 
 fn f_string(table: &'static str, name: &'static str) -> Field<String> {
