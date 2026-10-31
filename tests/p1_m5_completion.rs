@@ -191,8 +191,9 @@ fn migrate_create_initial_sql_and_columns() {
     let src = format!("{} model User {{ id Int @id email String @unique name String? }}", header());
     let s = parse(&src).unwrap();
     let sql = rustorm::migrations::initial_sql(&s).unwrap();
-    assert!(sql.contains("CREATE TABLE") && sql.contains("users") || sql.contains("users"));
-    assert!(sql.contains("PRIMARY KEY"));
+    assert!(sql.contains("CREATE TABLE"), "sql: {sql}");
+    assert!(sql.to_lowercase().contains("user") || sql.contains("User"), "sql: {sql}");
+    assert!(sql.contains("PRIMARY KEY"), "sql: {sql}");
 }
 
 #[test]
