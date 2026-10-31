@@ -50,24 +50,10 @@ jobs:
         run: ls -la /tmp | head -n 50
       - name: Test annotation
         run: echo "::error file=tests/p1_m5_completion.rs,line=1::TEST ANNOTATION FROM CI"
-      - name: Diagnostic flaky loop
-        if: always()
-        run: |
-          for i in 1 2 3 4 5; do
-            echo "RUN $i"
-            cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/run_$i.txt
-            status=${PIPESTATUS[0]}
-            echo "RUN $i EXIT:$status"
-            if [ $status -ne 0 ]; then
-              echo "::error file=tests/p1_m5_completion.rs,line=1::RUN $i FAILED"
-              grep -E "FAILED|failures:" /tmp/run_$i.txt | head -n 10
-            fi
-          done
-          echo "DONE LOOP"
       - name: Test without optional connector
-        run: cargo test --locked --offline -- --test-threads=1
+        run: cargo test --locked --offline --tests --lib --bins -- --test-threads=1
       - name: Test with connector enabled
-        run: cargo test --locked --offline --features postgres -- --test-threads=1
+        run: cargo test --locked --offline --features postgres --tests --lib --bins -- --test-threads=1
       - name: Run real PostgreSQL integration tests
         run: cargo test --locked --offline --features postgres --test postgres -- --ignored
       - name: Run PostgreSQL migration integration tests
