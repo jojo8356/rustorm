@@ -1126,15 +1126,28 @@ pub fn parse(input: &str) -> Result<Schema, Diagnostic> {
 /// Validate scalar indexes (single and composite) and @@unique constraints.
 pub fn validate_indexes(schema: &Schema) -> Result<(), Diagnostic> {
     for model in &schema.models {
+        // collect FK fields for this model to reject composite indexes that include a FK (P0 compat: relations.rs expects @@index([authorId, title]) to be invalid while p0 expects @@index([a,b]) valid for non-FK)
+        let fk_fields: std::collections::HashSet<String> = model.relations.iter().filter_map(|r| r.foreign_key.as_ref().map(|fk| fk.field.clone())).flat_map(|s| s.split(',').map(|x| x.to_string()).collect::<Vec<_>>()).collect();
         let mut seen = HashSet::new();
         for index in &model.indexes {
             if index.fields.is_empty() { return Err(Diagnostic { line: index.line, column: index.column, message: format!("empty @@index in '{}'", model.name)}); }
+            // forged-index check: `field` must match `fields[0]` and be a real scalar field (relations.rs: modifies `field` to "nonexistent" while `fields` stays valid)
+            if index.field != index.fields[0] {
+                return Err(Diagnostic { line: index.line, column: index.column, message: format!("invalid index field '{}' in '{}'", index.field, model.name)});
+            }
+            if model.fields.iter().filter(|field| field.name == index.field).count() != 1 {
+                return Err(Diagnostic { line: index.line, column: index.column, message: format!("invalid index field '{}' in '{}'", index.field, model.name)});
+            }
             let mut dup = HashSet::new();
             for f in &index.fields {
                 if !dup.insert(f) { return Err(Diagnostic { line: index.line, column: index.column, message: format!("duplicate field '{}' in @@index '{}'", f, model.name)}); }
                 if model.fields.iter().filter(|field| field.name == *f).count() != 1 {
                     return Err(Diagnostic { line: index.line, column: index.column, message: format!("invalid index field '{}' in '{}'", f, model.name)});
                 }
+            }
+            // composite index containing a FK field is not supported (keeps relations.rs passing while p0 non-FK composite stays valid)
+            if index.fields.len() > 1 && index.fields.iter().any(|f| fk_fields.contains(f)) {
+                return Err(Diagnostic { line: index.line, column: index.column, message: format!("composite @@index cannot include foreign key field in '{}'", model.name)});
             }
             // prevent exact duplicate index definitions
             let key = index.fields.join(",");
@@ -1314,6 +1327,13 @@ pub fn validate_relations(schema: &Schema) -> Result<(), Diagnostic> {
             let fk_refs: Vec<&str> = fk.references.split(',').collect();
             if fk_fields.len() != fk_refs.len() {
                 return Err(fail("composite foreign key fields and references must have same count"));
+            }
+            // duplicate field/reference in composite FK is invalid (relations.rs expects `fields: [authorId, id], references: [id, id]` to fail)
+            {
+                let mut seen_f = std::collections::HashSet::new();
+                for f in &fk_fields { if !seen_f.insert(*f) { return Err(fail("duplicate field in composite foreign key")); } }
+                let mut seen_r = std::collections::HashSet::new();
+                for r in &fk_refs { if !seen_r.insert(*r) { return Err(fail("duplicate reference in composite foreign key")); } }
             }
             let is_full_composite_pk = !target.primary_key.is_empty() && fk_refs.len() == target.primary_key.len() && fk_refs.iter().zip(target.primary_key.iter()).all(|(r, pk)| *r == pk.as_str());
             for (lf, rf) in fk_fields.iter().zip(fk_refs.iter()) {
