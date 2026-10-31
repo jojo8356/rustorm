@@ -37,9 +37,9 @@ fn insert(id: i32, name: &str) -> CompiledQuery {
 #[ignore = "requires a disposable local PostgreSQL server with trust authentication"]
 fn real_postgres_crud_transactions_errors_and_tls_policy() {
     let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT")
-        .expect("set RUSTORM_TEST_DATABASE_PORT")
-        .parse()
-        .unwrap();
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(5432);
     let user = std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
     let database =
         std::env::var("RUSTORM_TEST_DATABASE_NAME").unwrap_or_else(|_| "postgres".into());
@@ -238,7 +238,7 @@ fn real_postgres_crud_transactions_errors_and_tls_policy() {
         QueryError::UnfilteredMutation
     );
     let err = db.execute(&insert(2, hostile)).unwrap_err();
-    assert!(matches!(&err, Error::Server { code } if code.as_deref() == Some("23505")));
+    assert!(matches!(&err, Error::UniqueViolation { .. }) || matches!(&err, Error::Server { code } if code.as_deref() == Some("23505")), "got {:?}", err);
     assert!(!format!("{err:?}").contains(hostile));
     // An error in a transaction must not be reported as a successful commit.
     {
@@ -333,7 +333,7 @@ mod generated { pub mod rustorm; }
 use generated::rustorm::user;
 use rustorm::postgres::Connection;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
- let port = std::env::var("RUSTORM_TEST_DATABASE_PORT")?.parse()?;
+ let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5432);
  let name = std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
  let database = std::env::var("RUSTORM_TEST_DATABASE_NAME").unwrap_or_else(|_| "postgres".into());
  let mut db = Connection::connect_local_unencrypted(port, &name, &database)?;
@@ -384,9 +384,9 @@ fn atomic_updates_projection_and_case_insensitive_search_against_postgres() {
     const OPTIONAL: Field<Option<i32>> = Field::new(T, "optional");
     const LABEL: Field<Option<String>> = Field::new(T, "label");
     let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT")
-        .unwrap()
-        .parse()
-        .unwrap();
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(5432);
     let user = std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
     let database =
         std::env::var("RUSTORM_TEST_DATABASE_NAME").unwrap_or_else(|_| "postgres".into());

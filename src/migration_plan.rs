@@ -195,12 +195,19 @@ fn column_addition(field: &crate::schema::Field) -> Result<String, Error> {
             field.column
         )));
     }
-    let ty = match field.ty {
-        Scalar::Int => "INTEGER",
-        Scalar::BigInt => "BIGINT",
-        Scalar::Float => "DOUBLE PRECISION",
-        Scalar::Boolean => "BOOLEAN",
-        Scalar::String => "TEXT",
+    let ty: String = match &field.ty {
+        Scalar::Int => "INTEGER".to_string(),
+        Scalar::BigInt => "BIGINT".to_string(),
+        Scalar::Float => "DOUBLE PRECISION".to_string(),
+        Scalar::Boolean => "BOOLEAN".to_string(),
+        Scalar::String => "TEXT".to_string(),
+        Scalar::DateTime => "TIMESTAMPTZ".to_string(),
+        Scalar::Bytes => "BYTEA".to_string(),
+        Scalar::Json => "JSONB".to_string(),
+        Scalar::Decimal { precision: Some(p), scale: Some(s) } => format!("NUMERIC({p},{s})"),
+        Scalar::Decimal { precision: Some(p), scale: None } => format!("NUMERIC({p})"),
+        Scalar::Decimal { .. } => "DECIMAL".to_string(),
+        Scalar::Enum(_) => "TEXT".to_string(),
     };
     let mut result = format!("{} {ty}", quote(&field.column));
     if !field.nullable {
@@ -209,6 +216,7 @@ fn column_addition(field: &crate::schema::Field) -> Result<String, Error> {
     match &field.default {
         None => {}
         Some(DefaultValue::String(v)) => result.push_str(&format!(" DEFAULT {}", literal(v))),
+        Some(DefaultValue::Now) => result.push_str(" DEFAULT now()"),
         Some(DefaultValue::Boolean(v)) => result.push_str(if *v {
             " DEFAULT TRUE"
         } else {
@@ -348,6 +356,9 @@ pub fn plan(
         if !previous.contains_key(&model.table) {
             let one = Schema {
                 models: vec![model.clone()],
+                views: vec![],
+                composites: vec![],
+                enums: vec![],
                 generator_output: None,
             };
             changes.push(initial_sql(&one)?);

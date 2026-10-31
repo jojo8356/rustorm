@@ -85,10 +85,18 @@ impl<P, C, K> Many<P, C, K> {
             marker: PhantomData,
         }
     }
+    pub(crate) fn parent_table(&self) -> &'static str { self.parent_table }
+    pub(crate) fn parent_key(&self) -> &'static str { self.parent_key }
+    pub(crate) fn child_table(&self) -> &'static str { self.child_table }
+    pub(crate) fn child_key(&self) -> &'static str { self.child_key }
+    pub(crate) fn nullable_fk(&self) -> bool { self.nullable_fk }
+    pub(crate) fn unique_child_fields(&self) -> &'static [&'static str] { self.unique_child_fields }
+    pub(crate) fn composite_child_key(&self) -> &'static [&'static str] { self.composite_child_key }
+    pub(crate) fn through(&self) -> Option<(&'static str, &'static str, &'static str)> { self.through }
 }
 /// Non-owning, optional side of a unique 1–1 relation.
 #[derive(Debug)]
-pub struct InverseOne<P, C, K>(Many<P, C, K>);
+pub struct InverseOne<P, C, K>(pub Many<P, C, K>);
 impl<P, C, K> InverseOne<P, C, K> {
     #[doc(hidden)]
     pub const fn new(
@@ -130,10 +138,15 @@ impl<P, C, K> InverseOne<P, C, K> {
     pub fn is_not(self, filter: crate::query::Filter) -> crate::query::Filter {
         self.0.none(filter)
     }
+    pub(crate) fn inner(&self) -> &Many<P, C, K> { &self.0 }
+    pub(crate) fn parent_table(&self) -> &'static str { self.0.parent_table }
+    pub(crate) fn parent_key(&self) -> &'static str { self.0.parent_key }
+    pub(crate) fn child_table(&self) -> &'static str { self.0.child_table }
+    pub(crate) fn child_key(&self) -> &'static str { self.0.child_key }
 }
 /// An implicit many-to-many relationship through a generated join table.
 #[derive(Debug)]
-pub struct Through<P, C, K, L>(Many<P, C, K>, PhantomData<fn() -> L>);
+pub struct Through<P, C, K, L>(pub Many<P, C, K>, pub PhantomData<fn() -> L>);
 impl<P, C, K, L> Through<P, C, K, L> {
     #[doc(hidden)]
     pub const fn new(
@@ -186,6 +199,12 @@ impl<P, C, K, L> Through<P, C, K, L> {
     pub fn every(self, filter: crate::query::Filter) -> crate::query::Filter {
         self.filter(crate::query::RelationQuantifier::Every, filter)
     }
+    pub(crate) fn parent_table(&self) -> &'static str { self.0.parent_table }
+    pub(crate) fn parent_key(&self) -> &'static str { self.0.parent_key }
+    pub(crate) fn child_table(&self) -> &'static str { self.0.child_table }
+    pub(crate) fn child_key(&self) -> &'static str { self.0.child_key }
+    pub(crate) fn inner(&self) -> &Many<P, C, K> { &self.0 }
+    pub(crate) fn through(&self) -> Option<(&'static str, &'static str, &'static str)> { self.0.through }
 }
 /// Validated plan for creating one parent and one or more FK-owning children.
 /// Build the entire plan before opening a transaction; relation keys are injected automatically.
@@ -1154,15 +1173,15 @@ pub struct WithMany<P, C> {
 #[derive(Debug)]
 #[cfg_attr(not(feature = "postgres"), allow(dead_code))]
 pub struct One<C, P, K> {
-    child_table: &'static str,
-    child_key: &'static str,
-    parent_table: &'static str,
-    parent_key: &'static str,
-    nullable: bool,
-    parent_columns: &'static [&'static str],
-    unique_child_fields: &'static [&'static str],
-    composite_child_key: &'static [&'static str],
-    marker: PhantomData<fn() -> (C, P, K)>,
+    pub(crate) child_table: &'static str,
+    pub(crate) child_key: &'static str,
+    pub(crate) parent_table: &'static str,
+    pub(crate) parent_key: &'static str,
+    pub(crate) nullable: bool,
+    pub(crate) parent_columns: &'static [&'static str],
+    pub(crate) unique_child_fields: &'static [&'static str],
+    pub(crate) composite_child_key: &'static [&'static str],
+    pub(crate) marker: PhantomData<fn() -> (C, P, K)>,
 }
 impl<C, P, K> One<C, P, K> {
     #[doc(hidden)]
@@ -1218,6 +1237,13 @@ impl<C, P, K> One<C, P, K> {
             marker: PhantomData,
         }
     }
+    pub(crate) fn child_table(&self) -> &'static str { self.child_table }
+    pub(crate) fn child_key(&self) -> &'static str { self.child_key }
+    pub(crate) fn parent_table(&self) -> &'static str { self.parent_table }
+    pub(crate) fn parent_key(&self) -> &'static str { self.parent_key }
+    pub(crate) fn nullable(&self) -> bool { self.nullable }
+    pub(crate) fn unique_child_fields(&self) -> &'static [&'static str] { self.unique_child_fields }
+    pub(crate) fn composite_child_key(&self) -> &'static [&'static str] { self.composite_child_key }
 }
 /// A child and its loaded parent; None represents a NULL foreign key.
 #[derive(Debug, Clone, PartialEq)]

@@ -52,10 +52,7 @@ impl Drop for Cleanup {
 #[test]
 #[ignore = "requires disposable PostgreSQL and CREATEDB privilege"]
 fn nested_creation_is_atomic_and_respects_outer_transactions() {
-    let port = std::env::var("RUSTORM_TEST_DATABASE_PORT")
-        .unwrap()
-        .parse()
-        .unwrap();
+    let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5432);
     let user = std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
     let admin_db =
         std::env::var("RUSTORM_TEST_DATABASE_NAME").unwrap_or_else(|_| "postgres".into());
@@ -94,7 +91,7 @@ fn count(db:&mut Connection) -> (i64,i64) {
  db.fetch::<rustorm::query::CountResult>(&post::count().compile().unwrap()).unwrap()[0].count)
 }
 fn main() {
- let port=std::env::var("RUSTORM_TEST_DATABASE_PORT").unwrap().parse().unwrap();
+ let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5432);
  let user=std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_|"rustorm".into());
  let dbname=std::env::var("RUSTORM_NESTED_DB").unwrap();
  let mut db=Connection::connect_local_unencrypted(port,&user,&dbname).unwrap();
@@ -325,6 +322,9 @@ fn main() {
             .current_dir(&consumer)
             .args(["run", "--offline", "--quiet"])
             .env("RUSTORM_NESTED_DB", &name)
+            .env("RUSTORM_TEST_DATABASE_PORT", port.to_string())
+            .env("RUSTORM_TEST_DATABASE_USER", &user)
+            .env("RUSTORM_TEST_DATABASE_NAME", &admin_db)
             .output()
             .unwrap();
     assert!(

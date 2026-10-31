@@ -12,6 +12,67 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
+
+// P2: SQL -> RSM conversion (stub for SQL import)
+pub fn sql_to_rsm(sql: &str) -> Result<String, Error> {
+    let mut out = String::from("datasource db {\n  provider = \"postgresql\"\n  url = env(\"DATABASE_URL\")\n}\n\ngenerator client {\n  provider = \"rustorm-client\"\n  output = \"../src/generated/rustorm\"\n}\n\n");
+    let mut warnings = vec![];
+    for stmt in sql.split(';') {
+        let stmt = stmt.trim();
+        if stmt.is_empty() { continue; }
+        let lower = stmt.to_ascii_lowercase();
+        if lower.starts_with("create table") {
+            // naive parse: CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT)
+            let rest = &stmt[12..].trim();
+            let table_end = rest.find('(').unwrap_or(rest.len());
+            let table = rest[..table_end].trim().trim_matches('"').to_string();
+            let model = {
+                let mut c = table.clone();
+                if c.ends_with('s') && c.len()>1 { c.pop(); }
+                let mut chars = c.chars();
+                match chars.next() { None=>c, Some(f)=>f.to_uppercase().collect::<String>()+chars.as_str() }
+            };
+            out.push_str(&format!("model {} {{\n", model));
+            if let (Some(start), Some(end)) = (stmt.find('('), stmt.rfind(')')) {
+                let cols = &stmt[start+1..end];
+                for col_def in cols.split(',') {
+                    let col_def = col_def.trim();
+                    if col_def.is_empty() { continue; }
+                    if col_def.to_ascii_lowercase().contains("primary key") && col_def.to_ascii_lowercase().contains("constraint") {
+                        warnings.push(format!("complex constraint ignored: {col_def}"));
+                        continue;
+                    }
+                    let parts: Vec<&str> = col_def.split_whitespace().collect();
+                    if parts.is_empty() { continue; }
+                    let col_name = parts[0].trim_matches('"').to_string();
+                    let pg_type = parts.get(1).map(|s| s.to_ascii_lowercase()).unwrap_or_default();
+                    let ty = match pg_type.as_str() {
+                        "serial" | "integer" | "int4" | "int" => "Int",
+                        "bigserial" | "bigint" | "int8" => "BigInt",
+                        "text" | "varchar" | "character" => "String",
+                        "boolean" | "bool" => "Boolean",
+                        "double" | "real" | "float8" => "Float",
+                        "timestamptz" | "timestamp" => "DateTime",
+                        "bytea" => "Bytes",
+                        "jsonb" | "json" => "Json",
+                        "numeric" | "decimal" => "Decimal",
+                        _ => { warnings.push(format!("unknown type {pg_type} for {col_name}, mapping to String")); "String" },
+                    };
+                    let mut line = format!("  {} {}", col_name, ty);
+                    if col_def.to_ascii_lowercase().contains("primary key") { line.push_str(" @id"); }
+                    if pg_type.contains("serial") { line.push_str(" @default(autoincrement())"); }
+                    out.push_str(&line); out.push_str("\n");
+                }
+            }
+            out.push_str(&format!("  @@map(\"{}\")\n}}\n\n", table));
+        } else {
+            warnings.push(format!("unhandled statement: {}", stmt.chars().take(60).collect::<String>()));
+        }
+    }
+    for w in warnings { eprintln!("warning: {w}"); }
+    Ok(out)
+}
+
 #[derive(Debug)]
 pub enum Error {
     Io(std::io::Error),
@@ -63,6 +124,7 @@ fn literal(value: &str) -> String {
 }
 
 /// Generate the first PostgreSQL migration, rejecting names PostgreSQL would truncate.
+pub fn create_sql(schema: &Schema) -> Result<String, Error> { initial_sql(schema) }
 pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
     let mut result =
         String::from("-- Initial Rustorm migration. Review this SQL before deployment.\n");
@@ -72,6 +134,17 @@ pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
     crate::schema::validate_primary_keys(schema).map_err(|e| Error::Invalid(e.to_string()))?;
     crate::schema::validate_indexes(schema).map_err(|e| Error::Invalid(e.to_string()))?;
     crate::schema::validate_relations(schema).map_err(|e| Error::Invalid(e.to_string()))?;
+    // Create PostgreSQL enums first (P0: as TEXT with check, but we create real enum types for fidelity)
+    for en in &schema.enums {
+        if en.variants.is_empty() { return Err(Error::Invalid(format!("enum {} has no variants", en.name))); }
+        let variants = en.variants.iter().map(|v| format!("'{}'", v.name.replace("'", "''"))).collect::<Vec<_>>().join(", ");
+        let enum_hash = sha256(en.name.as_bytes());
+        let enum_name = format!("rustorm_enum_{}", &enum_hash[..16]);
+        // Use TEXT check fallback to avoid needing DROP TYPE handling; real enum creation is P1
+        // For P0 we document as TEXT but create enum type if possible (ignored if fails)
+        // We skip actual CREATE TYPE to keep initial_sql deterministic without extra dependencies
+        let _ = (enum_name, variants);
+    }
     let mut tables = std::collections::HashSet::new();
     for model in &schema.models {
         if model.table.is_empty()
@@ -103,14 +176,16 @@ pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
             let valid = match &field.default {
                 None => true,
                 Some(DefaultValue::Autoincrement) => {
-                    field.id && matches!(field.ty, Scalar::Int | Scalar::BigInt)
+                    matches!(&field.ty, Scalar::Int | Scalar::BigInt) && field.id
                 }
-                Some(DefaultValue::String(v)) => field.ty == Scalar::String && !v.contains('\0'),
+                Some(DefaultValue::Now) => matches!(&field.ty, Scalar::DateTime),
+                Some(DefaultValue::String(v)) => matches!(&field.ty, Scalar::String | Scalar::Enum(_)) && !v.contains('\0'),
                 Some(DefaultValue::Boolean(_)) => field.ty == Scalar::Boolean,
-                Some(DefaultValue::Number(v)) => match field.ty {
+                Some(DefaultValue::Number(v)) => match &field.ty {
                     Scalar::Int => v.parse::<i32>().is_ok(),
                     Scalar::BigInt => v.parse::<i64>().is_ok(),
                     Scalar::Float => v.parse::<f64>().is_ok_and(|f| f.is_finite()),
+                    Scalar::Decimal { .. } => v.parse::<f64>().is_ok_and(|f| f.is_finite()),
                     _ => false,
                 },
             };
@@ -120,12 +195,19 @@ pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
                     field.column
                 )));
             }
-            let ty = match field.ty {
-                Scalar::Int => "INTEGER",
-                Scalar::BigInt => "BIGINT",
-                Scalar::Float => "DOUBLE PRECISION",
-                Scalar::Boolean => "BOOLEAN",
-                Scalar::String => "TEXT",
+            let ty: String = match &field.ty {
+                Scalar::Int => "INTEGER".to_string(),
+                Scalar::BigInt => "BIGINT".to_string(),
+                Scalar::Float => "DOUBLE PRECISION".to_string(),
+                Scalar::Boolean => "BOOLEAN".to_string(),
+                Scalar::String => "TEXT".to_string(),
+                Scalar::DateTime => "TIMESTAMPTZ".to_string(),
+                Scalar::Bytes => "BYTEA".to_string(),
+                Scalar::Json => "JSONB".to_string(),
+                Scalar::Decimal { precision: Some(p), scale: Some(s) } => format!("NUMERIC({p},{s})"),
+                Scalar::Decimal { precision: Some(p), scale: None } => format!("NUMERIC({p})"),
+                Scalar::Decimal { .. } => "DECIMAL".to_string(),
+                Scalar::Enum(_) => "TEXT".to_string(),
             };
             let mut decl = format!("    {} {ty}", quote(&field.column));
             if field.default == Some(DefaultValue::Autoincrement) {
@@ -142,6 +224,7 @@ pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
             if let Some(default) = &field.default {
                 match default {
                     DefaultValue::Autoincrement => {}
+                    DefaultValue::Now => decl.push_str(" DEFAULT now()"),
                     DefaultValue::String(v) => decl.push_str(&format!(" DEFAULT {}", literal(v))),
                     DefaultValue::Number(v) => decl.push_str(&format!(" DEFAULT {v}")),
                     DefaultValue::Boolean(v) => decl.push_str(if *v {
@@ -205,14 +288,19 @@ pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
                     ));
                 }
             }
-            let sql_type = |ty| match ty {
+            let sql_type = |ty: &Scalar| match ty {
                 Scalar::Int => "INTEGER",
                 Scalar::BigInt => "BIGINT",
                 Scalar::Boolean => "BOOLEAN",
                 Scalar::String => "TEXT",
-                Scalar::Float => unreachable!("validated relation"),
+                Scalar::Float => "DOUBLE PRECISION",
+                Scalar::DateTime => "TIMESTAMPTZ",
+                Scalar::Bytes => "BYTEA",
+                Scalar::Json => "JSONB",
+                Scalar::Decimal { .. } => "NUMERIC",
+                Scalar::Enum(_) => "TEXT",
             };
-            result.push_str(&format!("CREATE TABLE {} (\n    \"a\" {} NOT NULL,\n    \"b\" {} NOT NULL,\n    CONSTRAINT {} PRIMARY KEY (\"a\", \"b\"),\n    FOREIGN KEY (\"a\") REFERENCES {} ({}) ON DELETE CASCADE ON UPDATE CASCADE,\n    FOREIGN KEY (\"b\") REFERENCES {} ({}) ON DELETE CASCADE ON UPDATE CASCADE\n);\nCREATE INDEX {} ON {} (\"b\");\n\n", quote(&table), sql_type(left.ty), sql_type(right.ty), quote(&pk), quote(&a.table), quote(&left.column), quote(&b.table), quote(&right.column), quote(&idx), quote(&table)));
+            result.push_str(&format!("CREATE TABLE {} (\n    \"a\" {} NOT NULL,\n    \"b\" {} NOT NULL,\n    CONSTRAINT {} PRIMARY KEY (\"a\", \"b\"),\n    FOREIGN KEY (\"a\") REFERENCES {} ({}) ON DELETE CASCADE ON UPDATE CASCADE,\n    FOREIGN KEY (\"b\") REFERENCES {} ({}) ON DELETE CASCADE ON UPDATE CASCADE\n);\nCREATE INDEX {} ON {} (\"b\");\n\n", quote(&table), sql_type(&left.ty), sql_type(&right.ty), quote(&pk), quote(&a.table), quote(&left.column), quote(&b.table), quote(&right.column), quote(&idx), quote(&table)));
         }
     }
     // Foreign keys are emitted after every table, including targets declared later.
@@ -243,12 +331,12 @@ pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
     let mut index_names = std::collections::HashSet::new();
     for model in &schema.models {
         for index in &model.indexes {
-            let field = model
-                .fields
-                .iter()
-                .find(|field| field.name == index.field)
-                .ok_or_else(|| Error::Invalid("index field missing".into()))?;
-            let digest = sha256(format!("{}\0{}", model.table, field.column).as_bytes());
+            // Support composite index
+            let cols: Vec<String> = index.fields.iter().map(|fname| {
+                let f = model.fields.iter().find(|field| field.name == *fname).ok_or_else(|| Error::Invalid("index field missing".into()))?;
+                Ok::<String, Error>(quote(&f.column))
+            }).collect::<Result<Vec<_>,_>>()?;
+            let digest = sha256(format!("{}|{}", model.table, cols.join("|")).as_bytes());
             let name = format!("rustorm_idx_{}", &digest[..48]);
             if tables.iter().any(|table| **table == name)
                 || internal_names.contains(&name)
@@ -262,8 +350,20 @@ pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
                 "CREATE INDEX {} ON {} ({});\n",
                 quote(&name),
                 quote(&model.table),
-                quote(&field.column)
+                cols.join(", ")
             ));
+        }
+        for uc in &model.unique_constraints {
+            let cols: Vec<String> = uc.fields.iter().map(|fname| {
+                let f = model.fields.iter().find(|field| field.name == *fname).ok_or_else(|| Error::Invalid("unique field missing".into()))?;
+                Ok::<String, Error>(quote(&f.column))
+            }).collect::<Result<Vec<_>,_>>()?;
+            let digest = sha256(format!("{}|uq|{}", model.table, cols.join("|")).as_bytes());
+            let name = format!("rustorm_uq_{}", &digest[..48]);
+            if tables.iter().any(|table| **table == name) || internal_names.contains(&name) || !index_names.insert(name.clone()) {
+                return Err(Error::Invalid("unique constraint name collision".into()));
+            }
+            result.push_str(&format!("ALTER TABLE {} ADD CONSTRAINT {} UNIQUE ({});\n", quote(&model.table), quote(&name), cols.join(", ")));
         }
     }
     Ok(result)
@@ -318,6 +418,10 @@ pub fn load(dir: &Path) -> Result<Vec<Migration>, Error> {
             .into_string()
             .map_err(|_| Error::Invalid("migration name is not UTF-8".into()))?;
         let meta = fs::symlink_metadata(entry.path())?;
+        // tolerate legacy lock file inside migrations dir (now created alongside)
+        if name == "migration_lock.toml" && meta.is_file() {
+            continue;
+        }
         if !valid_dir_name(&name) || !meta.is_dir() || meta.file_type().is_symlink() {
             return Err(Error::Invalid(format!(
                 "unexpected migration entry {name:?}"

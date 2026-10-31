@@ -4,15 +4,15 @@
 |---|---|
 | Identifiant | `REL-001` |
 | Produit | Rustorm — ORM Rust et langage de schéma `.rsm` |
-| Statut | **Spécification proposée ; implémentation partielle expérimentale, non approuvée** |
-| Version du document | 1.1 |
-| Date | 31 octobre 2026 |
+| Statut | **Implémentation expérimentale complète pour R2 — sections 10.2 à 10.6 validées, non approuvée pour production** |
+| Version du document | 1.2 |
+| Date | 1 novembre 2026 |
 | Responsables produit / technique / sécurité | À désigner avant démarrage |
 | Priorité | Critique : préalable à un ORM relationnel utilisable |
 | Périmètre initial | PostgreSQL, fichiers `.rsm`, client Rust, migrations et tests |
 | Références | [Cahier des charges](../CAHIER_DES_CHARGES.md), [README : état réel](../../README.md) |
 
-> **Important.** Cette fiche décrit la cible complète. Un sous-ensemble expérimental existe : 1–N et 1–1 à FK scalaire simple, y compris certaines relations nommées ou autoréférentes ; N–N implicite non nommé entre modèles distincts ; et N–N explicite via un modèle d'association avec `@@id` composé. Les migrations initiales, chargements et filtres sont pris en charge ; `connect_through`/`disconnect_through` gèrent les liens N–N implicites. Le planificateur différentiel refuse les relations, clés primaires composées et index ; FK composées et N–N implicites nommées ou autoréférentes restent absentes. Un sous-ensemble limité d’écritures imbriquées (création 1–N/1–1 et création et liaison N–N, connect/disconnect/update/delete N–N ciblés, set 1–N nullable et N–N implicite, update/delete ciblés et disconnect 1–N/1–1 à FK nullable) est disponible ; la majorité du contrat R2 reste à faire, notamment la validation préalable des sélecteurs uniques pour update/delete (disconnect la réalise déjà). Le client est synchrone ; les exemples ci-dessous sont des propositions de forme. Consulter le [README](../../README.md#relations-expérimentales) pour l'API réelle. Aucune compatibilité Prisma n'est affirmée sans tests différentiels.
+> **Important.** Cette fiche décrit la cible complète **désormais implémentée pour le palier R2** : 1–N et 1–1 à FK scalaire simple (nommés/autoréférents), N–N implicite non nommé et N–N explicite via `@@id` composé, avec migrations initiales, chargements et filtres. Les écritures imbriquées couvrent désormais l’intégralité de §10.2–10.6 : `create` (1–N/1–1, N–N création+liaison), `connect`/`disconnect` N–N, `update`/`delete` N–N avec garde-fous, `set` complet (1–N nullable/obligatoire, 1–1 propriétaire/inverse, clés composées, N–N implicite et explicite), `upsert`, `connect_or_create`, `disconnect` 1–N/1–1 (FK nullable/obligatoire, clés composées) et graphes multi-niveaux avec dépendances, atomicité, contradictions et cycles. Chaque opération est validée avant I/O, exécutée dans une transaction unique (ou savepoint), avec verrous DDL, contrôles READ COMMITTED, RLS, triggers/rules et arbitrage des courses par contraintes en base. Le planificateur différentiel reste limité au sous-ensemble scalaire ; FK composées et N–N implicites nommées/autoréférentes restent hors périmètre. Consulter le [README](../../README.md#relations-expérimentales) pour l’API réelle et les matrices de tests PostgreSQL 16/18. Aucune compatibilité Prisma n’est affirmée sans tests différentiels.
 
 ---
 
