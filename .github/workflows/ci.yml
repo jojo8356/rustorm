@@ -35,14 +35,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libpq-dev
       - name: Test without optional connector
         run: |
-          cargo test --locked --offline 2>&1 | tee /tmp/fail.txt
+          cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/fail.txt
           STATUS=${PIPESTATUS[0]}
           echo "------TAIL------"
-          tail -n 50 /tmp/fail.txt
+          tail -n 100 /tmp/fail.txt
           echo "------FAILED LINES------"
-          grep -E 'FAILED|failures:' /tmp/fail.txt | head -n 20 || true
+          grep -E 'FAILED|failures:|panicked|assertion' /tmp/fail.txt | head -n 50 || true
           if [ $STATUS -ne 0 ]; then
-            echo "::error::OFFLINE FAILED $(grep -E 'FAILED' /tmp/fail.txt | head -c 1200)"
+            echo "::error::OFFLINE FAILED $(grep -A 10 'FAILED\|panicked' /tmp/fail.txt | head -c 3000)"
             exit $STATUS
           fi
       - name: Test with connector enabled
