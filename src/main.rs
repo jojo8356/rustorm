@@ -291,6 +291,8 @@ fn run() -> Result<(), (i32, String)> {
                 }
                 i+=1;
             }
+            // suppress unused warning when postgres feature disabled (force is only used inside cfg)
+            let _ = force;
             #[cfg(feature = "postgres")]
             {
                 // Try real introspection if DATABASE_URL available
