@@ -214,11 +214,11 @@ fn main() {
     graph3.validate().unwrap();
     db.nested_graph(graph3).unwrap();
     // vérifie trigger refusé (on crée un trigger et on tente une opération)
-    db.execute_raw("CREATE FUNCTION keep_post() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.author_id := OLD.author_id; RETURN NEW; END $$; CREATE TRIGGER keep_post BEFORE UPDATE ON posts FOR EACH ROW EXECUTE FUNCTION keep_post()").unwrap();
+    db.execute_raw("CREATE FUNCTION keep_post() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.author_id := OLD.author_id; RETURN NEW; END $$; CREATE TRIGGER keep_post BEFORE UPDATE ON required_posts FOR EACH ROW EXECUTE FUNCTION keep_post()").unwrap();
     let mut tx = db.begin().unwrap();
     assert!(matches!(tx.nested_set_ext(NestedSetExt::many_required(user::required_posts(), 1, required_post::ID, vec![21]).unwrap()), Err(Error::InvalidInput(_))));
     tx.rollback().unwrap();
-    db.execute_raw("DROP TRIGGER keep_post ON posts; DROP FUNCTION keep_post()").unwrap();
+    db.execute_raw("DROP TRIGGER keep_post ON required_posts; DROP FUNCTION keep_post()").unwrap();
 
     // isolation : multi-level exige READ COMMITTED
     let mut tx2 = db.begin().unwrap();
