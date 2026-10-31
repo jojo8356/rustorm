@@ -29,6 +29,8 @@ fn fk_composite_two_columns_generates_composite_fk() {
     let fk_field = schema.models[1].relations[0].foreign_key.as_ref().unwrap().field.clone();
     assert!(fk_field.contains(','), "fk_field should contain comma for composite: {:?}", fk_field);
     let sql = rustorm::migrations::initial_sql(&schema).unwrap();
+    println!("SQL1 for fk_composite_two_columns: {}", sql);
+    eprintln!("SQL1 for fk_composite_two_columns: {}", sql);
     assert!(sql.contains("FOREIGN KEY"), "sql: {sql}");
     assert!(sql.contains("ON DELETE CASCADE"), "sql: {sql}");
 }
