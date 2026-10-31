@@ -39,8 +39,22 @@ jobs:
         run: cargo test --locked --offline --test p1_m5_completion -- --list 2>&1 | head -n 100
       - name: Diagnostic run p1_m5 only
         run: cargo test --locked --offline --test p1_m5_completion -- --nocapture
-      - name: Diagnostic run p0 only
-        run: cargo test --locked --offline --test p0_schema -- --nocapture
+      - name: Diagnostic p1_m5 fk
+        run: cargo test --locked --offline --test p1_m5_completion fk_composite -- --nocapture
+      - name: Diagnostic p1_m5 enum
+        run: cargo test --locked --offline --test p1_m5_completion enum_with_map -- --nocapture
+      - name: Diagnostic p1_m5 triple
+        run: cargo test --locked --offline --test p1_m5_completion triple_slash -- --nocapture
+      - name: Diagnostic p1_m5 generate
+        run: cargo test --locked --offline --test p1_m5_completion generate_contains -- --nocapture
+      - name: Diagnostic p1_m5 builder
+        run: cargo test --locked --offline --test p1_m5_completion builder_api -- --nocapture
+      - name: Diagnostic p1_m5 migrate
+        run: cargo test --locked --offline --test p1_m5_completion migrate_create -- --nocapture
+      - name: Diagnostic p1_m5 json
+        run: cargo test --locked --offline --test p1_m5_completion json_filters -- --nocapture
+      - name: Diagnostic p1_m5 bytes
+        run: cargo test --locked --offline --test p1_m5_completion bytes_and -- --nocapture
       - name: Test without optional connector
         run: cargo test --locked --offline
       - name: Test with connector enabled
