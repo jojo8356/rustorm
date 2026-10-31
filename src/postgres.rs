@@ -580,6 +580,7 @@ impl Connection {
     ) -> Result<(), Error>
     where
         K: crate::row::FromValue + std::hash::Hash + Eq + Clone,
+    {
         if !self.transaction_is_idle() {
             return Err(Error::InvalidInput("nested upsert requires idle connection"));
         }
@@ -598,6 +599,7 @@ impl Connection {
     ) -> Result<(), Error>
     where
         K: crate::row::FromValue + std::hash::Hash + Eq + Clone,
+    {
         if !self.transaction_is_idle() {
             return Err(Error::InvalidInput("nested connect_or_create requires idle connection"));
         }
