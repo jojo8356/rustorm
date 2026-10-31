@@ -50,18 +50,13 @@ jobs:
         run: ls -la /tmp | head -n 50
       - name: Diagnostic double run
         if: always()
-        continue-on-error: true
         run: |
-          set -o pipefail
           echo "FIRST RUN"
-          cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/a.txt
-          echo "FIRST_EXIT:${PIPESTATUS[0]}"
-          grep -E "FAILED|test result" /tmp/a.txt | tail -n 5 || true
+          cargo test --locked --offline -- --test-threads=1
+          echo "FIRST_EXIT:0"
           echo "SECOND RUN"
-          cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/b.txt
-          echo "SECOND_EXIT:${PIPESTATUS[0]}"
-          grep -E "FAILED|failures:" /tmp/b.txt | head -n 20 || true
-          echo "END"
+          cargo test --locked --offline -- --test-threads=1
+          echo "SECOND_EXIT:0"
       - name: Test without optional connector
         run: cargo test --locked --offline -- --test-threads=1
       - name: Test with connector enabled
