@@ -54,6 +54,8 @@ jobs:
           echo "FIRST RUN"
           cargo test --locked --offline -- --test-threads=1
           echo "FIRST_EXIT:0"
+          rm -rf /tmp/rustorm* /tmp/*m5* target/debug/deps/*rustorm* 2>&1 | head
+          ls /tmp | head -n 20
           echo "SECOND RUN"
           cargo test --locked --offline -- --test-threads=1
           echo "SECOND_EXIT:0"
