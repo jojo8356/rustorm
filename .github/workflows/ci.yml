@@ -51,14 +51,13 @@ jobs:
       - name: Diagnostic double run
         if: always()
         run: |
+          set -o pipefail
           echo "FIRST RUN"
-          cargo test --locked --offline -- --test-threads=1
-          echo "FIRST_EXIT:0"
-          rm -rf /tmp/rustorm* /tmp/*m5* target/debug/deps/*rustorm* 2>&1 | head
-          ls /tmp | head -n 20
+          cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/first.txt
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then echo "::error::FIRST FAILED $(grep -E 'FAILED|failures:' /tmp/first.txt | head -c 800)"; exit 1; fi
           echo "SECOND RUN"
-          cargo test --locked --offline -- --test-threads=1
-          echo "SECOND_EXIT:0"
+          cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/second.txt
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then echo "::error::SECOND FAILED $(grep -E 'FAILED|failures:' /tmp/second.txt | head -c 800)"; grep -E "FAILED|  failures:" /tmp/second.txt | head -n 20; exit 1; fi
       - name: Test without optional connector
         run: cargo test --locked --offline -- --test-threads=1
       - name: Test with connector enabled
