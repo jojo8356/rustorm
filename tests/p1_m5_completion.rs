@@ -42,6 +42,9 @@ fn fk_composite_ddl_has_two_refs() {
     let sql = rustorm::migrations::initial_sql(&schema).unwrap();
     println!("SQL for fk_composite_ddl_has_two_refs: {}", sql);
     eprintln!("SQL for fk_composite_ddl_has_two_refs: {}", sql);
+    if !sql.contains("FOREIGN KEY") {
+        panic!("SQL_MISSING_FK for fk_composite_ddl_has_two_refs: {}", sql);
+    }
     assert!(sql.contains("FOREIGN KEY"), "sql: {sql}");
     // should contain both local cols
     assert!(sql.contains("p1") && sql.contains("p2"), "sql: {sql}");
