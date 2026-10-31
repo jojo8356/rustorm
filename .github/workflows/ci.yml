@@ -37,6 +37,10 @@ jobs:
         run: cargo test --locked --offline -- --list 2>&1 | head -n 100
       - name: Diagnostic check p1_m5
         run: cargo test --locked --offline --test p1_m5_completion -- --list 2>&1 | head -n 100
+      - name: Diagnostic run p1_m5 only
+        run: cargo test --locked --offline --test p1_m5_completion -- --nocapture
+      - name: Diagnostic run p0 only
+        run: cargo test --locked --offline --test p0_schema -- --nocapture
       - name: Test without optional connector
         run: cargo test --locked --offline
       - name: Test with connector enabled
