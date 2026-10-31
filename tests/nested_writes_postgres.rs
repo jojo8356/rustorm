@@ -71,7 +71,7 @@ impl Drop for Cleanup { fn drop(&mut self) { let _ = self.admin.execute_raw(&for
 #[test]
 #[ignore = "requires disposable PostgreSQL and CREATEDB privilege"]
 fn nested_writes_all_remaining_features() {
-    let port = std::env::var("RUSTORM_TEST_DATABASE_PORT").unwrap().parse().unwrap();
+    let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5432);
     let user = std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
     let admin_db = std::env::var("RUSTORM_TEST_DATABASE_NAME").unwrap_or_else(|_| "postgres".into());
     let mut admin = Connection::connect_local_unencrypted(port, &user, &admin_db).unwrap();
@@ -98,7 +98,7 @@ use rustorm::{
     query::{QueryError, Value},
 };
 fn main() {
-    let port = std::env::var("RUSTORM_TEST_DATABASE_PORT").unwrap().parse().unwrap();
+    let port: u16 = std::env::var("RUSTORM_TEST_DATABASE_PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(5432);
     let user = std::env::var("RUSTORM_TEST_DATABASE_USER").unwrap_or_else(|_| "rustorm".into());
     let dbname = std::env::var("RUSTORM_WRITES_DB").unwrap();
     let mut db = Connection::connect_local_unencrypted(port, &user, &dbname).unwrap();
@@ -232,6 +232,9 @@ fn main() {
         .current_dir(&consumer)
         .args(["run", "--offline", "--quiet"])
         .env("RUSTORM_WRITES_DB", &name)
+        .env("RUSTORM_TEST_DATABASE_PORT", port.to_string())
+        .env("RUSTORM_TEST_DATABASE_USER", &user)
+        .env("RUSTORM_TEST_DATABASE_NAME", &admin_db)
         .output()
         .unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
