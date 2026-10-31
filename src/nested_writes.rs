@@ -628,11 +628,13 @@ pub(crate) fn execute_nested_graph(tx: &mut crate::postgres::Transaction<'_>, gr
                 if tx.execute(&q)? != 1 { return Err(Error::RelationNotFound); }
             },
             GraphOp::Update { table, filter, update } => {
+                let mut params = vec![];
+                let cond = filter.clone().render(&mut params);
+                let pre = CompiledQuery { sql: format!("SELECT 1 FROM {} WHERE ({}) FOR UPDATE", quote(table), cond.clone()), params: params.clone() };
+                if tx.query(&pre)?.len() != 1 { return Err(Error::RelationAmbiguous); }
                 let q = update.clone().where_(filter.clone()).compile().map_err(|_| Error::InvalidInput("invalid update"))?;
                 let affected = tx.execute(&q)?;
                 if affected != 1 { return Err(Error::RelationAmbiguous); }
-                let mut params = vec![];
-                let cond = filter.clone().render(&mut params);
                 let check = CompiledQuery { sql: format!("SELECT 1 FROM {} WHERE ({})", quote(table), cond), params };
                 if tx.query(&check)?.len()!=1 { return Err(Error::UnexpectedResult); }
             },
