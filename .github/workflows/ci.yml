@@ -54,10 +54,10 @@ jobs:
           set -o pipefail
           echo "FIRST RUN"
           cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/first.txt
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then echo "FIRST FAILED"; cat /tmp/first.txt | grep -E "FAILED|failures:" | head -n 20; echo "FIRST_FAILED" > ci_failure.log; git config user.email "ci@rustorm.test"; git config user.name "CI"; git add ci_failure.log; git commit -m "ci: first run failed"; git push origin HEAD:arena/c3e84afe-rustorm; exit 1; fi
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then echo "::error file=tests/p1_m5_completion.rs,line=1::FIRST FAILED $(grep -E 'FAILED|failures:' /tmp/first.txt | head -c 500)"; exit 1; fi
           echo "SECOND RUN"
           cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/second.txt
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then echo "SECOND FAILED"; cat /tmp/second.txt | grep -E "FAILED|failures:" | head -n 20; echo "SECOND_FAILED" > ci_failure2.log; cat /tmp/second.txt | grep -E "test .*FAILED|failures:" | head -n 50 > ci_failure2.log; git config user.email "ci@rustorm.test"; git config user.name "CI"; git add ci_failure2.log; git commit -m "ci: second run failed $(cat /tmp/second.txt | grep -E 'FAILED' | head -c 100)"; git push origin HEAD:arena/c3e84afe-rustorm; exit 1; fi
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then echo "::error file=tests/p1_m5_completion.rs,line=1::SECOND FAILED $(grep -E 'FAILED|failures:' /tmp/second.txt | head -c 500)"; exit 1; fi
       - name: Test without optional connector
         run: cargo test --locked --offline -- --test-threads=1
       - name: Test with connector enabled
