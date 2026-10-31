@@ -67,6 +67,7 @@ const PGRES_TUPLES_OK: c_int = 2;
 pub enum Error {
     Connection,
     InvalidInput(&'static str),
+    Invalid(String),
     Server {
         code: Option<String>,
     },
@@ -91,6 +92,7 @@ impl fmt::Display for Error {
                 f.write_str("PostgreSQL connection failed (check configuration and TLS)")
             }
             Self::InvalidInput(reason) => write!(f, "invalid input: {reason}"),
+            Self::Invalid(msg) => write!(f, "invalid: {msg}"),
             Self::Server { code } => write!(
                 f,
                 "PostgreSQL server error (SQLSTATE {})",
@@ -558,7 +560,7 @@ impl Connection {
         plan: crate::nested_writes::NestedSetExt<P, C, K, L>,
     ) -> Result<(), Error>
     where
-        L: crate::row::FromValue + std::hash::Hash + Eq,
+        L: crate::row::FromValue + std::hash::Hash + Eq + crate::query::IntoFieldValue<L>,
     {
         if !self.transaction_is_idle() {
             return Err(Error::InvalidInput("nested set ext requires idle connection"));
@@ -575,7 +577,9 @@ impl Connection {
     pub fn nested_upsert<P, C, K>(
         &mut self,
         plan: crate::nested_writes::NestedUpsert<P, C, K>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        K: crate::row::FromValue + std::hash::Hash + Eq + Clone,
         if !self.transaction_is_idle() {
             return Err(Error::InvalidInput("nested upsert requires idle connection"));
         }
@@ -591,7 +595,9 @@ impl Connection {
     pub fn nested_connect_or_create<P, C, K>(
         &mut self,
         plan: crate::nested_writes::NestedConnectOrCreate<P, C, K>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        K: crate::row::FromValue + std::hash::Hash + Eq + Clone,
         if !self.transaction_is_idle() {
             return Err(Error::InvalidInput("nested connect_or_create requires idle connection"));
         }

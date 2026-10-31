@@ -130,7 +130,7 @@ impl<P, C, K, L> NestedSetExt<P, C, K, L> {
 }
 
 #[cfg(feature = "postgres")]
-pub(crate) fn execute_nested_set_ext<P, C, K, L>(tx: &mut crate::postgres::Transaction<'_>, plan: NestedSetExt<P, C, K, L>) -> Result<(), crate::postgres::Error> where L: crate::row::FromValue + std::hash::Hash + Eq {
+pub(crate) fn execute_nested_set_ext<P, C, K, L>(tx: &mut crate::postgres::Transaction<'_>, plan: NestedSetExt<P, C, K, L>) -> Result<(), crate::postgres::Error> where L: crate::row::FromValue + std::hash::Hash + Eq + crate::query::IntoFieldValue<L> {
     use crate::postgres::Error;
     let quote = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
     match plan.kind {
