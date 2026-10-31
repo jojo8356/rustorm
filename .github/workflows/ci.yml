@@ -42,42 +42,55 @@ jobs:
         run: cargo test --locked --offline --test p1_m5_completion -- --nocapture
       - name: Diagnostic p1_m5 fk
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion fk_composite -- --nocapture
       - name: Diagnostic p1_m5 enum
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion enum_with_map -- --nocapture
       - name: Diagnostic p1_m5 triple
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion triple_slash -- --nocapture
       - name: Diagnostic p1_m5 generate
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion generate_contains -- --nocapture
       - name: Diagnostic p1_m5 builder
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion builder_api -- --nocapture
       - name: Diagnostic p1_m5 migrate
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion migrate_create -- --nocapture
       - name: Diagnostic p1_m5 json
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion json_filters -- --nocapture
       - name: Diagnostic p1_m5 bytes
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion bytes_and -- --nocapture
       - name: Diagnostic p1_m5 introspection
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion introspection_offline -- --nocapture
       - name: Diagnostic p1_m5 find_unique
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion find_unique -- --nocapture
       - name: Diagnostic p1_m5 filter_in
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion filter_in -- --nocapture
       - name: Diagnostic p1_m5 aggregate
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion aggregate_count -- --nocapture
       - name: Diagnostic p1_m5 distinct
         if: always()
+        continue-on-error: true
         run: cargo test --locked --offline --test p1_m5_completion distinct_with -- --nocapture
       - name: Test without optional connector
         run: cargo test --locked --offline
