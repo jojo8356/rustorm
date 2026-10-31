@@ -105,7 +105,25 @@ impl FromValue for bool {
 }
 impl FromValue for String {
     fn from_value(oid: u32, value: Option<&str>) -> Result<Self, DecodeError> {
-        Ok(required(oid, value, &[25, 1042, 1043], "String")?.to_owned())
+        Ok(required(oid, value, &[25, 1042, 1043, 1184, 1114, 3802, 114], "String")?.to_owned())
+    }
+}
+impl FromValue for Vec<u8> {
+    fn from_value(oid: u32, value: Option<&str>) -> Result<Self, DecodeError> {
+        let s = required(oid, value, &[17], "Bytes")?;
+        if let Some(hex) = s.strip_prefix("\\x") {
+            if hex.len() % 2 != 0 { return Err(DecodeError::InvalidValue("Bytes")); }
+            let mut out = Vec::with_capacity(hex.len()/2);
+            let mut i = 0;
+            while i < hex.len() {
+                let b = u8::from_str_radix(&hex[i..i+2], 16).map_err(|_| DecodeError::InvalidValue("Bytes"))?;
+                out.push(b);
+                i+=2;
+            }
+            Ok(out)
+        } else {
+            Ok(s.as_bytes().to_vec())
+        }
     }
 }
 impl<T: FromValue> FromValue for Option<T> {

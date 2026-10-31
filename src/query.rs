@@ -8,6 +8,7 @@ pub enum Value {
     BigInt(i64),
     Float(f64),
     Bool(bool),
+    Bytes(Vec<u8>),
     Null,
 }
 
@@ -38,13 +39,19 @@ macro_rules! values {
     ($($t:ty => $v:ident),* $(,)?) => {$(impl IntoFieldValue<$t> for $t { fn into_value(self) -> Value { Value::$v(self) } })*};
 }
 values!(i32 => Int, i64 => BigInt, f64 => Float, bool => Bool);
+impl IntoFieldValue<Vec<u8>> for Vec<u8> {
+    fn into_value(self) -> Value { Value::Bytes(self) }
+}
+impl IntoFieldValue<Vec<u8>> for &[u8] {
+    fn into_value(self) -> Value { Value::Bytes(self.to_vec()) }
+}
 
 /// A field tied to a generated model. Its table is checked when it is used.
 #[derive(Debug)]
 pub struct Field<T> {
-    table: &'static str,
-    name: &'static str,
-    marker: PhantomData<fn() -> T>,
+    pub table: &'static str,
+    pub name: &'static str,
+    pub marker: PhantomData<fn() -> T>,
 }
 impl<T> Copy for Field<T> {}
 impl<T> Clone for Field<T> {
@@ -223,6 +230,40 @@ impl Field<String> {
             FilterOp::ILike(Value::String(format!("%{}", like_literal(value)))),
         )
     }
+    /// P1: Json filters for Json fields (stored as JSONB). Uses jsonb operators.
+    pub fn json_equals(self, value: &str) -> Filter {
+        // Compare entire JSON document as text representation via ::jsonb
+        Filter::atom(self.table, self.name, FilterOp::JsonEquals(Value::String(value.to_owned())))
+    }
+    pub fn json_contains(self, value: &str) -> Filter {
+        // JSON contains: field @> value::jsonb
+        Filter::atom(self.table, self.name, FilterOp::JsonContains(Value::String(value.to_owned())))
+    }
+    pub fn json_path_equals(self, path: &[&str], value: &str) -> Filter {
+        // Extract via #>> and compare
+        let path_str = path.join(",");
+        Filter::atom(self.table, self.name, FilterOp::JsonPathEquals { path: path_str, value: Value::String(value.to_owned()) })
+    }
+    pub fn json_has_key(self, key: &str) -> Filter {
+        Filter::atom(self.table, self.name, FilterOp::JsonHasKey(Value::String(key.to_owned())))
+    }
+}
+/// P1: String query mode for case sensitivity
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StringQueryMode { Default, Insensitive }
+impl Field<String> {
+    pub fn contains_with_mode(self, value: &str, mode: StringQueryMode) -> Filter {
+        match mode {
+            StringQueryMode::Default => self.contains(value),
+            StringQueryMode::Insensitive => self.contains_insensitive(value),
+        }
+    }
+    pub fn equals_with_mode(self, value: &str, mode: StringQueryMode) -> Filter {
+        match mode {
+            StringQueryMode::Default => self.equals(value.to_string()),
+            StringQueryMode::Insensitive => Filter::atom(self.table, self.name, FilterOp::ILike(Value::String(value.to_owned()))),
+        }
+    }
 }
 impl<T> Field<Option<T>> {
     /// Sort ascending with NULL values before non-NULL values.
@@ -366,13 +407,18 @@ impl Field<Option<String>> {
     }
 }
 #[derive(Debug, Clone)]
-enum FilterOp {
+pub(crate) enum FilterOp {
     Compare(&'static str, Value),
     In(Vec<Value>, bool),
     Like(Value),
     ILike(Value),
     IsNull,
     IsNotNull,
+    // P1 Json operators
+    JsonEquals(Value),
+    JsonContains(Value),
+    JsonHasKey(Value),
+    JsonPathEquals { path: String, value: Value },
 }
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RelationQuantifier {
@@ -405,7 +451,7 @@ pub struct Filter {
     expr: FilterExpr,
 }
 impl Filter {
-    fn atom(table: &'static str, name: &'static str, op: FilterOp) -> Self {
+    pub(crate) fn atom(table: &'static str, name: &'static str, op: FilterOp) -> Self {
         Self {
             expr: FilterExpr::Atom { table, name, op },
         }
@@ -467,7 +513,7 @@ impl Filter {
         }
     }
     // Only conjunctions preserve a unique equality. Never descend into OR or NOT.
-    fn has_unique_equality(&self, table: &str, keys: &[&str]) -> bool {
+    pub(crate) fn has_unique_equality(&self, table: &str, keys: &[&str]) -> bool {
         match &self.expr {
             FilterExpr::Atom {
                 table: actual,
@@ -478,7 +524,7 @@ impl Filter {
             _ => false,
         }
     }
-    fn validate(&self, table: &str, depth: usize) -> Result<(), QueryError> {
+    pub(crate) fn validate(&self, table: &str, depth: usize) -> Result<(), QueryError> {
         if depth > 64 {
             return Err(QueryError::FilterTooDeep);
         }
@@ -490,9 +536,6 @@ impl Filter {
                 op: FilterOp::In(values, _),
                 ..
             } => {
-                if values.is_empty() {
-                    return Err(QueryError::EmptyValueList);
-                }
                 if values.len() > MAX_PARAMETERS {
                     return Err(QueryError::TooManyParameters);
                 }
@@ -525,10 +568,10 @@ impl Filter {
             FilterExpr::Not(child) => child.validate(table, depth + 1),
         }
     }
-    fn render(self, params: &mut Vec<Value>) -> String {
+    pub(crate) fn render(self, params: &mut Vec<Value>) -> String {
         self.render_qualified(params, None, 0)
     }
-    fn render_qualified(
+    pub(crate) fn render_qualified(
         self,
         params: &mut Vec<Value>,
         qualifier: Option<&str>,
@@ -545,6 +588,15 @@ impl Filter {
                     format!("{} {operator} ${}", qualified(name), params.len())
                 }
                 FilterOp::In(values, negated) => {
+                    if values.is_empty() {
+                        // P0 semantics: in([]) => false (0 rows), not_in([]) => true (all rows)
+                        // Use constant expressions that are independent of NULL semantics
+                        if negated {
+                            return "1=1".to_string();
+                        } else {
+                            return "1=0".to_string();
+                        }
+                    }
                     let placeholders = values
                         .into_iter()
                         .map(|value| {
@@ -569,6 +621,24 @@ impl Filter {
                 }
                 FilterOp::IsNull => format!("{} IS NULL", qualified(name)),
                 FilterOp::IsNotNull => format!("{} IS NOT NULL", qualified(name)),
+                FilterOp::JsonEquals(value) => {
+                    params.push(value);
+                    format!("{}::jsonb = ${}::jsonb", qualified(name), params.len())
+                }
+                FilterOp::JsonContains(value) => {
+                    params.push(value);
+                    format!("{}::jsonb @> ${}::jsonb", qualified(name), params.len())
+                }
+                FilterOp::JsonHasKey(value) => {
+                    params.push(value);
+                    format!("{}::jsonb ? ${}", qualified(name), params.len())
+                }
+                FilterOp::JsonPathEquals { path, value } => {
+                    params.push(value);
+                    // path stored as comma-separated, convert to postgres path literal '{a,b}'
+                    let pg_path = path.split(',').collect::<Vec<_>>().join(",");
+                    format!("{} #>> '{{{}}}' = ${}", qualified(name), pg_path, params.len())
+                }
             },
             FilterExpr::Relation {
                 parent,
@@ -669,6 +739,7 @@ pub enum QueryError {
     NestedRelationKeyMutation,
     RequiredRelationViolation,
     NonUniqueNestedSelector,
+    Unsupported(String),
 }
 impl std::fmt::Display for QueryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -700,6 +771,7 @@ impl std::fmt::Display for QueryError {
             Self::NonUniqueNestedSelector => {
                 "nested selector must constrain a unique scalar field with a non-null equality"
             }
+            Self::Unsupported(s) => s.as_str(),
         })
     }
 }
@@ -772,6 +844,18 @@ impl Select {
     }
     pub fn take(mut self, count: u64) -> Self {
         self.take = Some(count);
+        self
+    }
+    /// P0 cursor pagination: filter by unique field greater than cursor value.
+    /// For AC §6.3 stability, requires explicit order_by on same field.
+    /// This implements the common `cursor: { id: 10 }` + `take` pattern as `field > cursor`.
+    pub fn cursor<T>(mut self, field: Field<T>, value: impl IntoFieldValue<T>) -> Self {
+        // Cursor assumes ascending order; for descending, caller should use lt instead via where_.
+        self.filters.push(Filter::atom(field.table_name(), field.column_name(), FilterOp::Compare(">", value.into_value())));
+        self
+    }
+    pub fn cursor_field<T>(mut self, field: Field<Option<T>>, value: impl IntoFieldValue<T>) -> Self {
+        self.filters.push(Filter::atom(field.table_name(), field.column_name(), FilterOp::Compare(">", value.into_value())));
         self
     }
     pub fn compile(self) -> Result<CompiledQuery, QueryError> {
@@ -936,6 +1020,114 @@ impl crate::row::FromRow for CountResult {
         })
     }
 }
+/// P1: Aggregate operations (_count, _avg, _sum, _min, _max) with filters and groupBy
+#[derive(Debug, Clone)]
+pub struct Aggregate {
+    table: &'static str,
+    ops: Vec<AggregateOp>,
+    filters: Vec<Filter>,
+    group_by: Vec<&'static str>,
+    having: Option<Filter>,
+    orders: Vec<Order>,
+    take: Option<u64>,
+    skip: Option<u64>,
+}
+#[derive(Debug, Clone)]
+enum AggregateOp {
+    Count { field: Option<&'static str>, distinct: bool },
+    Sum(&'static str),
+    Avg(&'static str),
+    Min(&'static str),
+    Max(&'static str),
+}
+impl Aggregate {
+    #[doc(hidden)]
+    pub fn new(table: &'static str) -> Self { Self { table, ops: vec![], filters: vec![], group_by: vec![], having: None, orders: vec![], take: None, skip: None } }
+    pub fn count<T>(mut self, field: Option<Field<T>>) -> Self {
+        self.ops.push(AggregateOp::Count { field: field.map(|f| f.column_name()), distinct: false });
+        self
+    }
+    pub fn count_distinct<T>(mut self, field: Field<T>) -> Self {
+        self.ops.push(AggregateOp::Count { field: Some(field.column_name()), distinct: true });
+        self
+    }
+    pub fn sum<T>(mut self, field: Field<T>) -> Self {
+        self.ops.push(AggregateOp::Sum(field.column_name())); self
+    }
+    pub fn avg<T>(mut self, field: Field<T>) -> Self {
+        self.ops.push(AggregateOp::Avg(field.column_name())); self
+    }
+    pub fn min<T>(mut self, field: Field<T>) -> Self {
+        self.ops.push(AggregateOp::Min(field.column_name())); self
+    }
+    pub fn max<T>(mut self, field: Field<T>) -> Self {
+        self.ops.push(AggregateOp::Max(field.column_name())); self
+    }
+    pub fn where_(mut self, f: Filter) -> Self { self.filters.push(f); self }
+    pub fn group_by<T>(mut self, field: Field<T>) -> Self { self.group_by.push(field.column_name()); self }
+    pub fn having(mut self, f: Filter) -> Self { self.having = Some(f); self }
+    pub fn order_by(mut self, o: Order) -> Self { self.orders.push(o); self }
+    pub fn take(mut self, n: u64) -> Self { self.take = Some(n); self }
+    pub fn skip(mut self, n: u64) -> Self { self.skip = Some(n); self }
+    pub fn compile(self) -> Result<CompiledQuery, QueryError> {
+        if self.ops.is_empty() && self.group_by.is_empty() { return Err(QueryError::EmptySelection); }
+        for f in &self.filters { f.validate(self.table, 0)?; }
+        let mut select = Vec::new();
+        for op in &self.ops {
+            match op {
+                AggregateOp::Count { field: None, .. } => select.push("COUNT(*)".to_string()),
+                AggregateOp::Count { field: Some(col), distinct } => {
+                    if *distinct { select.push(format!("COUNT(DISTINCT {})", quote(col))) } else { select.push(format!("COUNT({})", quote(col))) }
+                }
+                AggregateOp::Sum(col) => select.push(format!("SUM({})", quote(col))),
+                AggregateOp::Avg(col) => select.push(format!("AVG({})", quote(col))),
+                AggregateOp::Min(col) => select.push(format!("MIN({})", quote(col))),
+                AggregateOp::Max(col) => select.push(format!("MAX({})", quote(col))),
+            }
+        }
+        for g in &self.group_by { select.push(quote(g)); }
+        let mut sql = format!("SELECT {} FROM {}", select.join(", "), quote(self.table));
+        let mut params = Vec::new();
+        if !self.filters.is_empty() {
+            sql.push_str(" WHERE ");
+            sql.push_str(&self.filters.into_iter().map(|f| f.render(&mut params)).collect::<Vec<_>>().join(" AND "));
+        }
+        if !self.group_by.is_empty() {
+            sql.push_str(" GROUP BY ");
+            sql.push_str(&self.group_by.iter().map(|c| quote(c)).collect::<Vec<_>>().join(", "));
+            if let Some(h) = self.having {
+                h.validate(self.table, 0)?;
+                sql.push_str(" HAVING ");
+                sql.push_str(&h.render(&mut params));
+            }
+        }
+        if !self.orders.is_empty() {
+            sql.push_str(" ORDER BY ");
+            sql.push_str(&self.orders.iter().map(|o| format!("{} {}", quote(o.name), if o.descending { "DESC" } else { "ASC" })).collect::<Vec<_>>().join(", "));
+        }
+        if let Some(n) = self.take { params.push(Value::BigInt(n as i64)); sql.push_str(&format!(" LIMIT ${}", params.len())); }
+        if let Some(n) = self.skip { params.push(Value::BigInt(n as i64)); sql.push_str(&format!(" OFFSET ${}", params.len())); }
+        check_parameter_count(&params)?;
+        Ok(CompiledQuery { sql, params })
+    }
+}
+/// P1: GroupBy with by/having
+pub type GroupBy = Aggregate;
+
+/// Stub for createMany (P1) — renders as multiple INSERTs or batch via postgres.
+/// P0 provides single-row create; this stub exists for API completeness and will be implemented fully in P1.
+#[derive(Debug, Clone)]
+pub struct InsertManyStub {
+    table: &'static str,
+}
+impl InsertManyStub {
+    #[doc(hidden)]
+    pub fn new(table: &'static str) -> Self { Self { table } }
+    pub fn compile(self) -> Result<CompiledQuery, QueryError> { Err(QueryError::Unsupported("createMany is P1 and not yet implemented; use create() in a transaction".into())) }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpsertStub;
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AssignmentOp {
@@ -1068,6 +1260,9 @@ pub struct Insert {
     returning: Option<&'static [&'static str]>,
 }
 impl Insert {
+    pub fn table_name(&self) -> &'static str {
+        self.table
+    }
     #[doc(hidden)]
     pub fn new(table: &'static str, required: &'static [&'static str]) -> Self {
         Self {
@@ -1244,6 +1439,9 @@ impl Update {
         self.filters
             .push(Filter::atom(table, key, FilterOp::Compare("=", parent)));
         self.compile()
+    }
+    pub fn table_name(&self) -> &'static str {
+        self.table
     }
     #[doc(hidden)]
     pub fn new(table: &'static str) -> Self {
@@ -1425,6 +1623,9 @@ impl Delete {
         self.filters
             .push(Filter::atom(table, key, FilterOp::Compare("=", parent)));
         self.compile()
+    }
+    pub fn table_name(&self) -> &'static str {
+        self.table
     }
     #[doc(hidden)]
     pub fn new(table: &'static str) -> Self {

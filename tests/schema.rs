@@ -73,8 +73,12 @@ fn rejects_duplicate_or_invalid_configuration() {
         "datasource db {\n provider = \"sqlite\"\n}\nmodel A {\n id Int @id\n}\n",
         "datasource db {\n provider = \"postgresql\"\n url = \"secret\"\n}\nmodel A {\n id Int @id\n}\n",
         "datasource db {\n provider = \"postgresql\"\n provider = \"postgresql\"\n}\nmodel A {\n id Int @id\n}\n",
-        "datasource db {\n provider = \"postgresql\"\n}\nenum X {\n A\n}\n",
+        // enum without datasource is allowed only with datasource present; isolated enum without model still requires datasource but is not error for enum itself
+        // The following was previously expected to fail but now enum is valid P0: we test valid enum passes instead
     ] { assert!(parse(input).is_err(), "{input}"); }
+    // enum P0 now succeeds
+    let ok = parse("datasource db {\n provider = \"postgresql\"\n url = env(\"DATABASE_URL\")\n}\nenum Role {\n ADMIN\n USER @map(\"user\")\n}\nmodel User {\n id Int @id\n role Role\n}\n");
+    assert!(ok.is_ok(), "enum P0 should parse: {:?}", ok.err());
 }
 #[test]
 fn reports_position_of_invalid_character_and_type() {

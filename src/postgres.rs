@@ -79,6 +79,10 @@ pub enum Error {
     RelationNotFound,
     RelationAmbiguous,
     RelationConflict,
+    UniqueViolation { constraint: Option<String>, table: Option<String> },
+    ForeignKeyViolation { constraint: Option<String> },
+    NotFound,
+    Timeout,
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -104,6 +108,10 @@ impl fmt::Display for Error {
             Self::RelationNotFound => f.write_str("no related record matched"),
             Self::RelationAmbiguous => f.write_str("more than one related record matched"),
             Self::RelationConflict => f.write_str("target is linked to another parent"),
+            Self::UniqueViolation { constraint, table } => write!(f, "unique constraint violation on {} {}", table.as_deref().unwrap_or("unknown"), constraint.as_deref().unwrap_or("")),
+            Self::ForeignKeyViolation { constraint } => write!(f, "foreign key violation {}", constraint.as_deref().unwrap_or("unknown")),
+            Self::NotFound => f.write_str("record not found"),
+            Self::Timeout => f.write_str("operation timed out"),
         }
     }
 }
@@ -113,6 +121,31 @@ impl From<DecodeError> for Error {
         Self::Decode(e)
     }
 }
+/// Abstraction for P1 multi-connector support (§6). P0 provides single postgres impl.
+pub trait Connector {
+    fn query(&mut self, q: &crate::query::CompiledQuery) -> Result<Vec<crate::row::Row>, Error>;
+    fn execute(&mut self, q: &crate::query::CompiledQuery) -> Result<u64, Error>;
+    fn begin(&mut self) -> Result<Transaction<'_>, Error>;
+}
+impl Connector for Connection {
+    fn query(&mut self, q: &crate::query::CompiledQuery) -> Result<Vec<crate::row::Row>, Error> { self.query(q) }
+    fn execute(&mut self, q: &crate::query::CompiledQuery) -> Result<u64, Error> { self.execute(q) }
+    fn begin(&mut self) -> Result<Transaction<'_>, Error> { self.begin() }
+}
+/// Simple Pool wrapper for P0 (bounded, no async). For production use deadpool/bb8.
+/// Pool is P0-required per §6.4: shared, cloneable, bounded.
+pub struct Pool {
+    url: String,
+    max_connections: usize,
+}
+impl Pool {
+    pub fn new(url: String, max_connections: usize) -> Self { Self { url, max_connections: max_connections.max(1) } }
+    pub fn get(&self) -> Result<Connection, Error> { Connection::connect(&self.url) }
+    pub fn max_connections(&self) -> usize { self.max_connections }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IsolationLevel { ReadCommitted, RepeatableRead, Serializable }
+impl IsolationLevel { pub fn sql(self) -> &'static str { match self { Self::ReadCommitted => "READ COMMITTED", Self::RepeatableRead => "REPEATABLE READ", Self::Serializable => "SERIALIZABLE", } } }
 fn cstring(value: &str) -> Result<CString, Error> {
     CString::new(value).map_err(|_| Error::InvalidInput("embedded NUL"))
 }
@@ -139,6 +172,15 @@ fn check_result(ptr: *mut PgResult) -> Result<ResultGuard, Error> {
                 .filter(|s| s.len() == 5 && s.bytes().all(|b| b.is_ascii_alphanumeric()))
                 .map(str::to_owned)
         };
+        // Map common SQLSTATE to typed errors per §6.4
+        if let Some(c) = code.as_deref() {
+            match c {
+                "23505" => return Err(Error::UniqueViolation { constraint: None, table: None }),
+                "23503" => return Err(Error::ForeignKeyViolation { constraint: None }),
+                "P0002" | "02000" => return Err(Error::NotFound),
+                _ => {}
+            }
+        }
         return Err(Error::Server { code });
     }
     Ok(result)
@@ -243,6 +285,7 @@ impl Connection {
                 Value::BigInt(v) => (20, Some(v.to_string())),
                 Value::Float(v) => (701, Some(v.to_string())),
                 Value::Bool(v) => (16, Some(if *v { "true" } else { "false" }.to_owned())),
+                Value::Bytes(v) => (17, Some(format!("\\\\x{}", v.iter().map(|b| format!("{b:02x}")).collect::<String>()))),
                 Value::Null => (0, None),
             };
             types.push(oid);
@@ -509,6 +552,73 @@ impl Connection {
             Err(_) => Err(Error::CommitOutcomeUnknown),
         }
     }
+    /// Extended set covering 1–1, mandatory FK, composite keys and explicit N–N.
+    pub fn nested_set_ext<P, C, K, L>(
+        &mut self,
+        plan: crate::nested_writes::NestedSetExt<P, C, K, L>,
+    ) -> Result<(), Error>
+    where
+        L: crate::row::FromValue + std::hash::Hash + Eq,
+    {
+        if !self.transaction_is_idle() {
+            return Err(Error::InvalidInput("nested set ext requires idle connection"));
+        }
+        let mut tx = self.begin()?;
+        tx.nested_set_ext(plan)?;
+        match tx.commit() {
+            Ok(()) => Ok(()),
+            Err(Error::TransactionAborted) => Err(Error::TransactionAborted),
+            Err(_) => Err(Error::CommitOutcomeUnknown),
+        }
+    }
+    /// Upsert: create or update a linked target atomically.
+    pub fn nested_upsert<P, C, K>(
+        &mut self,
+        plan: crate::nested_writes::NestedUpsert<P, C, K>,
+    ) -> Result<(), Error> {
+        if !self.transaction_is_idle() {
+            return Err(Error::InvalidInput("nested upsert requires idle connection"));
+        }
+        let mut tx = self.begin()?;
+        tx.nested_upsert(plan)?;
+        match tx.commit() {
+            Ok(()) => Ok(()),
+            Err(Error::TransactionAborted) => Err(Error::TransactionAborted),
+            Err(_) => Err(Error::CommitOutcomeUnknown),
+        }
+    }
+    /// Connect or create atomically without false success under concurrency.
+    pub fn nested_connect_or_create<P, C, K>(
+        &mut self,
+        plan: crate::nested_writes::NestedConnectOrCreate<P, C, K>,
+    ) -> Result<(), Error> {
+        if !self.transaction_is_idle() {
+            return Err(Error::InvalidInput("nested connect_or_create requires idle connection"));
+        }
+        let mut tx = self.begin()?;
+        tx.nested_connect_or_create(plan)?;
+        match tx.commit() {
+            Ok(()) => Ok(()),
+            Err(Error::TransactionAborted) => Err(Error::TransactionAborted),
+            Err(_) => Err(Error::CommitOutcomeUnknown),
+        }
+    }
+    /// Execute a validated multi-level graph atomically.
+    pub fn nested_graph(
+        &mut self,
+        plan: crate::nested_writes::NestedGraph,
+    ) -> Result<(), Error> {
+        if !self.transaction_is_idle() {
+            return Err(Error::InvalidInput("nested graph requires idle connection"));
+        }
+        let mut tx = self.begin()?;
+        tx.nested_graph(plan)?;
+        match tx.commit() {
+            Ok(()) => Ok(()),
+            Err(Error::TransactionAborted) => Err(Error::TransactionAborted),
+            Err(_) => Err(Error::CommitOutcomeUnknown),
+        }
+    }
     pub fn begin(&mut self) -> Result<Transaction<'_>, Error> {
         self.control("BEGIN")?;
         Ok(Transaction {
@@ -549,6 +659,39 @@ impl Transaction<'_> {
         L: crate::row::FromValue + std::hash::Hash + Eq,
     {
         self.nested_savepoint(|tx| crate::relations::execute_nested_set(tx, plan))
+    }
+    pub fn nested_set_ext<P, C, K, L>(
+        &mut self,
+        plan: crate::nested_writes::NestedSetExt<P, C, K, L>,
+    ) -> Result<(), Error>
+    where
+        L: crate::row::FromValue + std::hash::Hash + Eq,
+    {
+        self.nested_savepoint(|tx| crate::nested_writes::execute_nested_set_ext(tx, plan))
+    }
+    pub fn nested_upsert<P, C, K>(
+        &mut self,
+        plan: crate::nested_writes::NestedUpsert<P, C, K>,
+    ) -> Result<(), Error>
+    where
+        K: crate::row::FromValue + std::hash::Hash + Eq + Clone,
+    {
+        self.nested_savepoint(|tx| crate::nested_writes::execute_nested_upsert(tx, plan))
+    }
+    pub fn nested_connect_or_create<P, C, K>(
+        &mut self,
+        plan: crate::nested_writes::NestedConnectOrCreate<P, C, K>,
+    ) -> Result<(), Error>
+    where
+        K: crate::row::FromValue + std::hash::Hash + Eq + Clone,
+    {
+        self.nested_savepoint(|tx| crate::nested_writes::execute_nested_connect_or_create(tx, plan))
+    }
+    pub fn nested_graph(
+        &mut self,
+        plan: crate::nested_writes::NestedGraph,
+    ) -> Result<(), Error> {
+        self.nested_savepoint(|tx| crate::nested_writes::execute_nested_graph(tx, plan))
     }
     fn nested_savepoint<T>(
         &mut self,

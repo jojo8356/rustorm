@@ -274,20 +274,19 @@ fn list_filters_are_typed_parameterized_and_combined() {
 #[test]
 fn lists_reject_empty_null_and_excessive_parameters() {
     use rustorm::query::{Delete, IntoFieldValue, MAX_PARAMETERS};
-    assert_eq!(
-        users()
-            .where_(ID.is_in(Vec::<i32>::new()))
-            .compile()
-            .unwrap_err(),
-        QueryError::EmptyValueList
-    );
-    assert_eq!(
-        Delete::new("users")
-            .where_(ID.not_in(Vec::<i32>::new()))
-            .compile()
-            .unwrap_err(),
-        QueryError::EmptyValueList
-    );
+    // P0: empty IN renders as 1=0/1=1 (see p0_query.rs), not EmptyValueList
+    assert!(users()
+        .where_(ID.is_in(Vec::<i32>::new()))
+        .compile()
+        .unwrap()
+        .sql
+        .contains("1=0"));
+    assert!(Delete::new("users")
+        .where_(ID.not_in(Vec::<i32>::new()))
+        .compile()
+        .unwrap()
+        .sql
+        .contains("1=1"));
     struct Null;
     impl IntoFieldValue<i32> for Null {
         fn into_value(self) -> Value {
@@ -388,13 +387,12 @@ fn count_builds_a_typed_aggregate_with_validated_filters() {
             .unwrap_err(),
         QueryError::WrongModel
     );
-    assert_eq!(
-        Count::new("users")
-            .where_(ID.is_in(Vec::<i32>::new()))
-            .compile()
-            .unwrap_err(),
-        QueryError::EmptyValueList
-    );
+    assert!(Count::new("users")
+        .where_(ID.is_in(Vec::<i32>::new()))
+        .compile()
+        .unwrap()
+        .sql
+        .contains("1=0"));
     assert_eq!(
         Count::new("users")
             .where_(ID.is_in(vec![1; MAX_PARAMETERS]))
