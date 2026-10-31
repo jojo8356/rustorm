@@ -1760,7 +1760,7 @@ pub fn generate(schema: &Schema) -> String {
             }
         }
         // P1: ModelDelegate for builder API inside each model module
-        out.push_str("    pub struct ModelDelegate;\n    impl ModelDelegate {\n        pub fn find_many(&self) -> ::rustorm::client_builder::FindManyBuilder { ::rustorm::client_builder::FindManyBuilder::new(\"" + m.table + "\", columns()) }\n        pub fn find_unique(&self, filter: ::rustorm::query::Filter) -> ::rustorm::client_builder::FindManyBuilder { ::rustorm::client_builder::FindManyBuilder::new(\"" + m.table + "\", columns()).filter(filter) }\n    }\n");
+        out.push_str(&format!("    pub struct ModelDelegate;\n    impl ModelDelegate {{\n        pub fn find_many(&self) -> ::rustorm::client_builder::FindManyBuilder {{ ::rustorm::client_builder::FindManyBuilder::new(\"{}\", columns()) }}\n        pub fn find_unique(&self, filter: ::rustorm::query::Filter) -> ::rustorm::client_builder::FindManyBuilder {{ ::rustorm::client_builder::FindManyBuilder::new(\"{}\", columns()).filter(filter) }}\n    }}\n", m.table, m.table));
         out.push_str("}\n\n");
     }
     // P2: views (read-only)
