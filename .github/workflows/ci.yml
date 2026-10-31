@@ -126,6 +126,10 @@ jobs:
         if: always()
         continue-on-error: true
         run: cargo test --locked --offline -- --test-threads=1 2>&1 | tail -n 100; echo "ALL_SINGLE:${PIPESTATUS[0]}"
+      - name: Diagnostic lib plus tests
+        if: always()
+        continue-on-error: true
+        run: cargo test --locked --offline --lib --tests -- --nocapture 2>&1 | tail -n 30; echo "LIB_TESTS:${PIPESTATUS[0]}"
       - name: Test without optional connector
         run: cargo test --locked --offline
       - name: Test with connector enabled
