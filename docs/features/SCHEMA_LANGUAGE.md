@@ -4,7 +4,7 @@
 |---|---|
 | Identifiant | `SCHEMA-001` |
 | Produit | Rustorm — ORM Rust et langage de schéma `.rsm` |
-| Statut | **Spécification proposée ; implémentation partielle P0** |
+| Statut | **P1 M5 — done validé : enum @map, format idempotent, ///, Type[]? rejet, EBNF §5.2 (tests p0_schema + p1_m5_completion)** |
 | Version | 1.0 |
 | Date | 1 novembre 2026 |
 | Références | [Cahier des charges §5](../CAHIER_DES_CHARGES.md#5-langage-rsm), [README](../../README.md) |

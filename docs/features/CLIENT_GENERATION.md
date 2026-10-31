@@ -3,7 +3,7 @@
 | Métadonnée | Valeur |
 |---|---|
 | Identifiant | `CLIENT-001` |
-| Statut | **Partiel P0 : génération modules simples ; `RustormClient` complet manquant** |
+| Statut | **P1 M5 — done validé : RustormClient + modules Record/Where/WhereUnique/Create/Update + build.rs + checksum (tests p1_m5_completion)** |
 | Version | 1.0 |
 | Date | 1 novembre 2026 |
 | Références | [Cahier §6.1](../CAHIER_DES_CHARGES.md#61-génération-et-intégration-p0), [README](../../README.md) |

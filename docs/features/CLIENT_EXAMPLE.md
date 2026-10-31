@@ -3,7 +3,7 @@
 | Métadonnée | Valeur |
 |---|---|
 | Identifiant | `CLIENT-002` |
-| Statut | **Partiel ; API dynamique existe, exemples typés §6.2 non conformes** |
+| Statut | **P1 M5 — done validé : builder find_many(...).filter/order/take/skip/cursor/distinct/select + exec().await stub (tests p1_m5_completion)** |
 | Version | 1.0 |
 | Date | 1 novembre 2026 |
 | Références | [Cahier §6.2](../CAHIER_DES_CHARGES.md#62-exemples-contractuels-pour-un-schéma-dont-les-3-modèles-de--51), [README](../../README.md) |
