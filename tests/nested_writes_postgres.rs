@@ -26,7 +26,7 @@ model RequiredPost {
  id Int @id
  title String @unique
  authorId Int? @map("author_id")
- author User @relation(fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+ author User? @relation(fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
  @@map("required_posts")
 }
 model Profile {
