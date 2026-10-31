@@ -34,7 +34,7 @@ jobs:
       - name: Install libpq development files
         run: sudo apt-get update && sudo apt-get install -y libpq-dev
       - name: Test without optional connector
-        run: cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/fail.txt; test ${PIPESTATUS[0]} -eq 0 || (echo "::error::OFFLINE FAILED $(grep -A 30 -E 'SQL_MISSING|SQL for|fk_composite' /tmp/fail.txt | head -c 3000)"; cat /tmp/fail.txt | grep -A 30 -E "SQL_MISSING|SQL for|fk_composite" | head -n 150; echo "---FULL FAIL---"; cat /tmp/fail.txt | grep -A 50 "fk_composite_ddl_has_two_refs" | head -n 100; exit 1)
+        run: cargo test --locked --offline -- --test-threads=1 --nocapture 2>&1 | tee /tmp/fail.txt; test ${PIPESTATUS[0]} -eq 0 || (echo "::error::OFFLINE FAILED $(grep -A 30 -E 'SQL_MISSING|SQL for|fk_composite' /tmp/fail.txt | head -c 3000)"; cat /tmp/fail.txt | grep -A 30 -E "SQL_MISSING|SQL for|fk_composite" | head -n 150; echo "---FULL FAIL---"; cat /tmp/fail.txt | grep -A 50 "fk_composite_ddl_has_two_refs" | head -n 100; exit 1)
       - name: Diagnostic single test verbose
         if: always()
         continue-on-error: true
