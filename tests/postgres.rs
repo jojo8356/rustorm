@@ -238,7 +238,8 @@ fn real_postgres_crud_transactions_errors_and_tls_policy() {
         QueryError::UnfilteredMutation
     );
     let err = db.execute(&insert(2, hostile)).unwrap_err();
-    assert!(matches!(&err, Error::Server { code } if code.as_deref() == Some("23505")));
+    eprintln!("insert duplicate got err={:?} code={:?}", err, match &err { Error::Server { code } => code, _ => &None });
+    assert!(matches!(&err, Error::Server { code } if code.as_deref() == Some("23505")), "got {:?}", err);
     assert!(!format!("{err:?}").contains(hostile));
     // An error in a transaction must not be reported as a successful commit.
     {
