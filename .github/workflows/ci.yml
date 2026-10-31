@@ -51,9 +51,24 @@ jobs:
       - name: Test annotation
         run: echo "::error file=tests/p1_m5_completion.rs,line=1::TEST ANNOTATION FROM CI"
       - name: Test without optional connector
-        run: cargo test --locked --offline --tests --lib --bins -- --test-threads=1
+        run: |
+          set -o pipefail
+          cargo test --locked --offline --tests --lib --bins -- --test-threads=1 2>&1 | tee /tmp/fail.txt
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            echo "::error file=tests/p1_m5_completion.rs,line=1::OFFLINE FAILED $(grep -E 'FAILED|test result: FAILED' /tmp/fail.txt | head -c 800)"
+            cat /tmp/fail.txt | grep -E "FAILED|  test" | head -n 30
+            exit $status
+          fi
       - name: Test with connector enabled
-        run: cargo test --locked --offline --features postgres --tests --lib --bins -- --test-threads=1
+        run: |
+          set -o pipefail
+          cargo test --locked --offline --features postgres --tests --lib --bins -- --test-threads=1 2>&1 | tee /tmp/fail2.txt
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            echo "::error file=tests/p1_m5_completion.rs,line=1::POSTGRES FAILED $(grep -E 'FAILED|test result: FAILED' /tmp/fail2.txt | head -c 800)"
+            exit $status
+          fi
       - name: Run real PostgreSQL integration tests
         run: cargo test --locked --offline --features postgres --test postgres -- --ignored
       - name: Run PostgreSQL migration integration tests
