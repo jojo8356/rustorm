@@ -96,9 +96,9 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          for t in p0_schema p0_types p0_query p0_relations p0_migrations p0_client p1_schema_language p1_query_engine p1_relations_polish p1_client p1_migrations p1_introspection p2_relations p2_client_example p2_composite_types p2_schema_parser p2_client_batch p2_introspection cardinality_query composite_schema composite_sql config_output_guard default_value_policy env_overrides json json_depth large_batch many_required m2m_explicit_join m2m_explicit_table migration_lock p1_m5_completion; do
+          for t in $(ls tests/*.rs | xargs -n1 basename | sed 's/\.rs$//' | tr '\n' ' '); do
             echo "=== $t ==="
-            cargo test --locked --offline --test $t -- --nocapture 2>&1 | tail -n 20
+            cargo test --locked --offline --test $t -- --nocapture 2>&1 | tail -n 5
             status=${PIPESTATUS[0]}
             if [ $status -ne 0 ]; then
               echo "::error::FAILED $t"
@@ -109,7 +109,11 @@ jobs:
       - name: Diagnostic lib unit tests
         if: always()
         continue-on-error: true
-        run: cargo test --locked --offline --lib -- --nocapture 2>&1 | tail -n 50; echo "LIB_EXIT:${PIPESTATUS[0]}"
+        run: cargo test --locked --offline --lib -- --nocapture 2>&1 | tail -n 20; echo "LIB_EXIT:${PIPESTATUS[0]}"
+      - name: Diagnostic bins
+        if: always()
+        continue-on-error: true
+        run: cargo test --locked --offline --bins -- --nocapture 2>&1 | tail -n 20; echo "BIN_EXIT:${PIPESTATUS[0]}"
       - name: Test without optional connector
         run: cargo test --locked --offline
       - name: Test with connector enabled
