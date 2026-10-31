@@ -112,7 +112,7 @@ fn main() {
     let q2 = profile::find_many().where_(profile::ID.equals(101)).compile().unwrap();
     assert_eq!(db.fetch::<profile::Record>(&q2).unwrap()[0].user_id, Some(1));
     // clear 1–1
-    let clear = NestedSetExt::clear_one_owned(profile::user(), 1).unwrap();
+    let clear: NestedSetExt<user::Record, profile::Record, i32, i32> = NestedSetExt::clear_one_owned(profile::user(), 1).unwrap();
     db.nested_set_ext(clear).unwrap();
     assert!(db.fetch::<profile::Record>(&q2).unwrap()[0].user_id.is_none());
 
