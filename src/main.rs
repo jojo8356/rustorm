@@ -106,7 +106,8 @@ fn read_schema_input(path: &Path) -> Result<String, (i32,String)> {
 }
 #[cfg(feature = "postgres")]
 fn introspect_to_rsm(conn: &mut rustorm::postgres::Connection) -> Result<String, Box<dyn std::error::Error>> {
-    let rows = conn.query("SELECT table_name, column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, ordinal_position", &[])?;
+    let q = rustorm::query::CompiledQuery { sql: "SELECT table_name, column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, ordinal_position".into(), params: vec![] };
+    let rows = conn.query(&q)?;
     let mut tables: std::collections::BTreeMap<String, Vec<(String, String, bool, Option<String>)>> = std::collections::BTreeMap::new();
     for row in rows {
         let table: String = row.get("table_name")?;
@@ -220,7 +221,8 @@ fn run() -> Result<(), (i32, String)> {
             {
                 let url = std::env::var("DATABASE_URL").map_err(|_| fail("DATABASE_URL required for reset"))?;
                 let mut conn = rustorm::postgres::Connection::connect(&url).map_err(|e| fail(e.to_string()))?;
-                conn.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;", &[]).map_err(|e| fail(e.to_string()))?;
+                let drop_q = rustorm::query::CompiledQuery { sql: "DROP SCHEMA public CASCADE; CREATE SCHEMA public;".into(), params: vec![] };
+                conn.execute(&drop_q).map_err(|e| fail(e.to_string()))?;
                 let dir = PathBuf::from("rustorm/migrations");
                 rustorm::migrations::deploy(&mut conn, &dir).map_err(|e| fail(e.to_string()))?;
                 println!("Reset complete (dropped and redeployed)");
