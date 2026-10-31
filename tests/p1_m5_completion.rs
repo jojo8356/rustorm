@@ -39,7 +39,12 @@ fn fk_composite_ddl_has_two_refs() {
     let src = format!("{} model P {{ id Int @id sec String @unique vals Val[] @@id([id, sec]) }} model Val {{ id Int @id p1 Int p2 String p P @relation(fields: [p1, p2], references: [id, sec], onDelete: Restrict, onUpdate: Cascade) }}", header());
     let schema = parse(&src).unwrap();
     let sql = rustorm::migrations::initial_sql(&schema).unwrap();
+    println!("SQL_DDL_HAS_TWO_REFS: {}", sql);
+    eprintln!("SQL_DDL_HAS_TWO_REFS: {}", sql);
     // Check that DDL contains the composite PK and at least the columns, FK is optional for this test's flakiness
+    if !sql.contains("CREATE TABLE") {
+        panic!("SQL_DDL_HAS_TWO_REFS_MISSING_CREATE_TABLE: {}", sql);
+    }
     assert!(sql.contains("CREATE TABLE"), "sql: {sql}");
     assert!(sql.contains("p1") && sql.contains("p2"), "sql: {sql}");
     // FK check is best-effort, not strict, to avoid flaky CI
