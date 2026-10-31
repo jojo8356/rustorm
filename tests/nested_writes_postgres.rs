@@ -19,6 +19,7 @@ model Post {
  title String @unique
  authorId Int @map("author_id")
  author User @relation(fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+ postTags PostTag[]
  @@map("posts")
 }
 model RequiredPost {
@@ -43,6 +44,7 @@ model RequiredProfile {
 model Tag {
  id String @id
  users User[]
+ postTags PostTag[]
  @@map("tags")
 }
 model CompositeItem {
