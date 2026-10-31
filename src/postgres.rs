@@ -673,7 +673,7 @@ impl Transaction<'_> {
         plan: crate::nested_writes::NestedSetExt<P, C, K, L>,
     ) -> Result<(), Error>
     where
-        L: crate::row::FromValue + std::hash::Hash + Eq,
+        L: crate::row::FromValue + std::hash::Hash + Eq + crate::query::IntoFieldValue<L>,
     {
         self.nested_savepoint(|tx| crate::nested_writes::execute_nested_set_ext(tx, plan))
     }
