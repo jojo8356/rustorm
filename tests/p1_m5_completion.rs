@@ -23,7 +23,7 @@ fn f_opt_string(table: &'static str, name: &'static str) -> Field<Option<String>
 // ---------- RELATIONS ----------
 #[test]
 fn fk_composite_two_columns_generates_composite_fk() {
-    let src = format!("{} model A {{ id Int @id sec String @unique posts Post[] @@id([id, sec]) }} model Post {{ id Int @id aId Int aSec String a A @relation(fields: [aId, aSec], references: [id, sec], onDelete: Cascade, onUpdate: Cascade) }}", header());
+    let src = format!("{} model A {{ id Int sec String posts Post[] @@id([id, sec]) }} model Post {{ id Int @id aId Int aSec String a A @relation(fields: [aId, aSec], references: [id, sec], onDelete: Cascade, onUpdate: Cascade) }}", header());
     let schema = parse(&src).expect("composite fk parse");
     // field is stored as "aId,aSec"
     let fk_field = schema.models[1].relations[0].foreign_key.as_ref().unwrap().field.clone();
@@ -36,7 +36,7 @@ fn fk_composite_two_columns_generates_composite_fk() {
 
 #[test]
 fn fk_composite_ddl_has_two_refs() {
-    let src = format!("{} model P {{ id Int @id sec String @unique vals Val[] @@id([id, sec]) }} model Val {{ id Int @id p1 Int p2 String p P @relation(fields: [p1, p2], references: [id, sec], onDelete: Restrict, onUpdate: Cascade) }}", header());
+    let src = format!("{} model P {{ id Int sec String vals Val[] @@id([id, sec]) }} model Val {{ id Int @id p1 Int p2 String p P @relation(fields: [p1, p2], references: [id, sec], onDelete: Restrict, onUpdate: Cascade) }}", header());
     let schema = parse(&src).unwrap();
     let sql = rustorm::migrations::initial_sql(&schema).unwrap();
     println!("SQL_DDL_HAS_TWO_REFS: {}", sql);
