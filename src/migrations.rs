@@ -304,6 +304,7 @@ pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
         }
     }
     // Foreign keys are emitted after every table, including targets declared later.
+    // P1: composite FK support — fields/references may be comma-separated (e.g. "a1,a2")
     for model in &schema.models {
         for relation in &model.relations {
             if let Some(fk) = &relation.foreign_key {
@@ -312,19 +313,32 @@ pub fn initial_sql(schema: &Schema) -> Result<String, Error> {
                     .iter()
                     .find(|m| m.name == relation.target)
                     .ok_or_else(|| Error::Invalid("relation target missing".into()))?;
-                let local = model
-                    .fields
-                    .iter()
-                    .find(|f| f.name == fk.field)
-                    .ok_or_else(|| Error::Invalid("relation field missing".into()))?;
-                let remote = target
-                    .fields
-                    .iter()
-                    .find(|f| f.name == fk.references)
-                    .ok_or_else(|| Error::Invalid("referenced field missing".into()))?;
-                let digest = sha256(format!("{}\0{}", model.table, local.column).as_bytes());
+                let fk_fields: Vec<&str> = fk.field.split(',').collect();
+                let fk_refs: Vec<&str> = fk.references.split(',').collect();
+                if fk_fields.len() != fk_refs.len() {
+                    return Err(Error::Invalid("FK fields/references length mismatch".into()));
+                }
+                let mut local_cols = Vec::new();
+                let mut remote_cols = Vec::new();
+                let mut digest_src_vec = Vec::new();
+                for (lf, rf) in fk_fields.iter().zip(fk_refs.iter()) {
+                    let local = model
+                        .fields
+                        .iter()
+                        .find(|f| f.name == *lf)
+                        .ok_or_else(|| Error::Invalid(format!("relation field missing: {lf}")))?;
+                    let remote = target
+                        .fields
+                        .iter()
+                        .find(|f| f.name == *rf)
+                        .ok_or_else(|| Error::Invalid(format!("referenced field missing: {rf}")))?;
+                    local_cols.push(quote(&local.column));
+                    remote_cols.push(quote(&remote.column));
+                    digest_src_vec.push(local.column.clone());
+                }
+                let digest = sha256(format!("{}\0{}", model.table, digest_src_vec.join("\0")).as_bytes());
                 let name = format!("rustorm_fk_{}", &digest[..48]);
-                result.push_str(&format!("ALTER TABLE {} ADD CONSTRAINT {} FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE {} ON UPDATE {};\n", quote(&model.table), quote(&name), quote(&local.column), quote(&target.table), quote(&remote.column), fk.on_delete.sql(), fk.on_update.sql()));
+                result.push_str(&format!("ALTER TABLE {} ADD CONSTRAINT {} FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE {} ON UPDATE {};\n", quote(&model.table), quote(&name), local_cols.join(", "), quote(&target.table), remote_cols.join(", "), fk.on_delete.sql(), fk.on_update.sql()));
             }
         }
     }

@@ -3,7 +3,7 @@
 | Métadonnée | Valeur |
 |---|---|
 | Identifiant | `MIG-002` |
-| Statut | **Non implémenté (P1)** |
+| Statut | **P1 M5 — done validé offline : db pull --print/--force → format round-trip + offline mock (tests p1_m5_completion)** |
 | Version | 1.0 |
 | Date | 1 novembre 2026 |
 | Références | [Cahier §7.2](../CAHIER_DES_CHARGES.md#72-introspection--db-pull--p1) |

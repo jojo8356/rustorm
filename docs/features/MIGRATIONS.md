@@ -3,7 +3,7 @@
 | Métadonnée | Valeur |
 |---|---|
 | Identifiant | `MIG-001` |
-| Statut | **Artéfacts minimaux ; `dev`/`deploy`/`status` partiels, `shadow`/`baseline`/`resolve` incomplets** |
+| Statut | **P1 M5 — done validé : create/plan/diff, deploy/status/resolve/baseline, composite FK DDL, split_sql, load (tests p1_m5_completion)** |
 | Version | 1.0 |
 | Date | 1 novembre 2026 |
 | Références | [Cahier §7.1](../CAHIER_DES_CHARGES.md#71-artéfacts-et-invariants-des-migrations), README migrations |

@@ -4,7 +4,7 @@
 |---|---|
 | Identifiant | `REL-001` |
 | Produit | Rustorm — ORM Rust et langage de schéma `.rsm` |
-| Statut | **Implémentation expérimentale complète pour R2 — sections 10.2 à 10.6 validées, non approuvée pour production** |
+| Statut | **P1 M5 — done validé : FK composites multi-col DDL + N-N nommées/autoréf (implicit_join_name_for_relation) + plan additif (tests p1_m5_completion + p1_relations_polish)** |
 | Version du document | 1.2 |
 | Date | 1 novembre 2026 |
 | Responsables produit / technique / sécurité | À désigner avant démarrage |

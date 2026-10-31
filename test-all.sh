@@ -40,20 +40,36 @@ run_step() {
   echo
 }
 
-echo "rustorm — test-all.sh"
+echo "rustorm — test-all.sh (P0+P1 M5 + P2)"
 echo "port=$PORT user=$USER db=$DB branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?') head=$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
 echo
 
-# 1) offline sans Postgres — 35 suites rapides
+# 1) offline sans Postgres — toutes suites rapides (P0 24 + P1 8 + P2 7 + M5)
 run_step "cargo test --offline (sans Postgres)" cargo test --offline -- --nocapture
 
-# 2) tout Postgres — 10 suites ignorées par défaut (cardinalities, composite, nested_writes, postgres, etc.)
-# On exporte PORT/USER pour que les consumers héritent même sans env externe (défaut 5432)
+# 1b) vérif fine offline par test (permet de localiser P1 M5)
+if [[ $FAILS -eq 0 ]]; then
+  info "Vérif fine offline par test (--test)"
+  for t in p0_cli p0_migrations p0_query p0_schema p1_agg_groupby p1_cli_advanced p1_decimal p1_introspection p1_json_filters p1_perf p1_prisma_import p1_relations_polish p1_m5_completion p2_client_example p2_composites p2_connectors p2_extensions p2_migrations p2_multifile p2_tooling p2_views cardinalities cardinalities_postgres composite_primary composite_postgres migrations migrations_postgres named_postgres named_relations nested_connect_or_create nested_create nested_create_postgres nested_disconnect_postgres nested_graph nested_set_ext nested_upsert nested_writes_postgres query postgres relations_postgres shadow_postgres; do
+    # certains tests n'existent qu'avec --features postgres, on teste sans feature d'abord
+    if cargo test --offline --test "$t" -- --nocapture > /tmp/rustorm-test-all-$$.log 2>&1; then
+      STEPS=$((STEPS+1)); info "[$STEPS]   --test $t (offline)"; ok "  --test $t"; echo
+    else
+      # si le test nécessite postgres feature, on réessaye avec feature mais sans --ignored (offline part)
+      if cargo test --offline --features postgres --test "$t" -- --nocapture > /tmp/rustorm-test-all-$$.log 2>&1; then
+        STEPS=$((STEPS+1)); info "[$STEPS]   --test $t (offline+postgres)"; ok "  --test $t"; echo
+      else
+        STEPS=$((STEPS+1)); fail "  --test $t (offline)"; FAILS=$((FAILS+1)); FAILED_STEPS+="- --test $t (offline)\n"; tail -20 /tmp/rustorm-test-all-$$.log | sed 's/^/  | /'; echo
+      fi
+    fi
+  done
+fi
+
+# 2) tout Postgres — suites ignorées par défaut
 export RUSTORM_TEST_DATABASE_PORT="$PORT"
 export RUSTORM_TEST_DATABASE_USER="$USER"
 export RUSTORM_TEST_DATABASE_NAME="$DB"
 
-# Vérifie que le PG répond avant de lancer les lourds (évite 10x timeout)
 if command -v pg_isready >/dev/null 2>&1; then
   if pg_isready -h 127.0.0.1 -p "$PORT" -U "$USER" -d "$DB" -q 2>/dev/null || pg_isready -h 127.0.0.1 -p "$PORT" -q 2>/dev/null; then
     ok "Postgres joignable sur 127.0.0.1:$PORT"

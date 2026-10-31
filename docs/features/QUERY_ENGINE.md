@@ -3,7 +3,7 @@
 | Métadonnée | Valeur |
 |---|---|
 | Identifiant | `QUERY-001` |
-| Statut | **Avancé P0 pour CRUD de base, lacunaire pour `findUnique`/`aggregate`/`groupBy`** |
+| Statut | **P1 M5 — done validé : findUnique/findFirst, cursor, select, distinct, in vide, aggregate/groupBy/having, json/mode (tests p1_m5_completion)** |
 | Version | 1.0 |
 | Date | 1 novembre 2026 |
 | Références | [Cahier §6.3](../CAHIER_DES_CHARGES.md#63-contrat-des-opérations-de-requête), README query tests |

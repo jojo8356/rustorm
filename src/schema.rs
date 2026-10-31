@@ -1759,6 +1759,8 @@ pub fn generate(schema: &Schema) -> String {
                 }
             }
         }
+        // P1: ModelDelegate for builder API inside each model module
+        out.push_str(&format!("    pub struct ModelDelegate;\n    impl ModelDelegate {{\n        pub fn find_many(&self) -> ::rustorm::client_builder::FindManyBuilder {{ ::rustorm::client_builder::FindManyBuilder::new(\"{}\", columns()) }}\n        pub fn find_unique(&self, filter: ::rustorm::query::Filter) -> ::rustorm::client_builder::FindManyBuilder {{ ::rustorm::client_builder::FindManyBuilder::new(\"{}\", columns()).filter(filter) }}\n    }}\n", m.table, m.table));
         out.push_str("}\n\n");
     }
     // P2: views (read-only)
@@ -1777,8 +1779,29 @@ pub fn generate(schema: &Schema) -> String {
         out.push_str(&format!("    pub fn find_many() -> ::rustorm::query::Select {{ ::rustorm::query::Select::new({:?}, columns()) }}\n", v.table));
         out.push_str("}\n\n");
     }
+    // P1: RustormClient top-level (P0 §6.1 + P1 pooling)
+    out.push_str("/// Generated typed client — mirrors Prisma's RustormClient.\n");
+    out.push_str("pub struct RustormClient {\n    #[cfg(feature = \"postgres\")]\n    pub pool: Option<::rustorm::postgres::Pool>,\n}\n");
+    out.push_str("impl RustormClient {\n    pub fn new(url: &str) -> Self { Self { #[cfg(feature = \"postgres\")] pool: Some(::rustorm::postgres::Pool::new(url.to_owned(), 5)) } }\n");
+    out.push_str("    pub fn from_env() -> Result<Self, String> { let url = std::env::var(\"DATABASE_URL\").map_err(|_| \"DATABASE_URL not set\".to_string())?; Ok(Self::new(&url)) }\n");
+    out.push_str("    pub fn builder() -> Self { Self::new(\"\") }\n");
+    for m in &schema.models {
+        out.push_str(&format!("    /// accessor for model {}\n    pub fn {}(&self) -> {}Delegate {{ {}Delegate }}\n", m.name, rust_ident(&snake(&m.name)), m.name, m.name));
+    }
+    out.push_str("}\n\n");
+    // per-model ModelDelegate inside each model module (builder API §6.2)
+    for m in &schema.models {
+        let mod_name = rust_ident(&snake(&m.name));
+        out.push_str(&format!("// per-model delegation handled via top-level delegates below\n"));
+    }
+    // Top-level delegates for each model (P1)
+    for m in &schema.models {
+        let mod_name = rust_ident(&snake(&m.name));
+        out.push_str(&format!("pub struct {}Delegate;\nimpl {}Delegate {{\n    pub fn find_many(&self) -> ::rustorm::client_builder::FindManyBuilder {{ ::rustorm::client_builder::FindManyBuilder::new(\"{}\", {}::columns()) }}\n    pub fn find_unique(&self, filter: ::rustorm::query::Filter) -> ::rustorm::client_builder::FindManyBuilder {{ ::rustorm::client_builder::FindManyBuilder::new(\"{}\", {}::columns()).filter(filter) }}\n    pub fn find_first(&self) -> ::rustorm::client_builder::FindManyBuilder {{ ::rustorm::client_builder::FindManyBuilder::new(\"{}\", {}::columns()) }}\n}}\n", m.name, m.name, m.table, mod_name, m.table, mod_name, m.table, mod_name));
+    }
     // P2: composite types
     for c in &schema.composites {
+
         out.push_str(&format!("pub mod {} {{ // {}\n", rust_ident(&snake(&c.name)), c.name));
         out.push_str("    #[derive(Debug, Clone, PartialEq)]\n    pub struct Composite { // Composite\n");
         for f in &c.fields {
