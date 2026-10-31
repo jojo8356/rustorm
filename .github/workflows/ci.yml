@@ -34,17 +34,7 @@ jobs:
       - name: Install libpq development files
         run: sudo apt-get update && sudo apt-get install -y libpq-dev
       - name: Test without optional connector
-        run: |
-          cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/fail.txt
-          STATUS=${PIPESTATUS[0]}
-          echo "------TAIL------"
-          tail -n 100 /tmp/fail.txt
-          echo "------FAILED LINES------"
-          grep -E 'FAILED|failures:|panicked|assertion' /tmp/fail.txt | head -n 50 || true
-          if [ $STATUS -ne 0 ]; then
-            echo "::error::OFFLINE FAILED $(grep -A 10 'FAILED\|panicked' /tmp/fail.txt | head -c 3000)"
-            exit $STATUS
-          fi
+        run: cargo test --locked --offline
       - name: Test with connector enabled
         run: cargo test --locked --offline --features postgres
       - name: Run real PostgreSQL integration tests
