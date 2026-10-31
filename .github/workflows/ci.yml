@@ -45,6 +45,15 @@ jobs:
             grep -E "FAILED|test result" /tmp/out.txt | head -n 20
           fi
           exit $status
+      - name: Diagnostic cleanup and retry
+        if: always()
+        continue-on-error: true
+        run: |
+          ls /tmp | grep -i rustorm | head -n 20
+          rm -rf /tmp/rustorm* 2>&1 | head
+          cargo test --locked --offline -- --test-threads=1 2>&1 | tee /tmp/out2.txt | tail -n 30
+          echo "RETRY_EXIT:${PIPESTATUS[0]}"
+          grep -E "FAILED|failures:" /tmp/out2.txt | head -n 20 || true
       - name: Test without optional connector
         run: cargo test --locked --offline -- --test-threads=1
       - name: Test with connector enabled
