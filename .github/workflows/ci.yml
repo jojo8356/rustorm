@@ -17,25 +17,16 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          cargo test --locked --offline -- --nocapture 2>&1 | tee "$RUNNER_TEMP/offline.log"
-      - name: Dump log on failure
-        if: failure()
-        shell: bash
-        run: |
-          echo "=== offline.log tail 500 ==="
-          tail -n 500 "$RUNNER_TEMP/offline.log" || true
-          echo "=== grep error ==="
-          grep -n "error\[" "$RUNNER_TEMP/offline.log" | tail -n 50 || true
-          grep -n "FAILED\|failed" "$RUNNER_TEMP/offline.log" | tail -n 50 || true
-          echo "=== cargo check ==="
-          cargo check --offline 2>&1 | grep -E "error|Error" | tail -n 100 || true
-      - name: Upload offline log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: offline-log-${{ matrix.os }}
-          path: ${{ runner.temp }}/offline.log
-          retention-days: 1
+          cargo test --locked --offline -- --nocapture 2>&1 | tee "${RUNNER_TEMP}/offline.log"
+          EXIT=${PIPESTATUS[0]}
+          if [ $EXIT -ne 0 ]; then
+            echo "::group::offline.log tail"
+            tail -n 800 "${RUNNER_TEMP}/offline.log" || true
+            echo "::endgroup::"
+            echo "=== grep FAILED ==="
+            grep -E "FAILED|failed|error\[E|test result:" "${RUNNER_TEMP}/offline.log" | tail -n 100 || true
+            exit $EXIT
+          fi
       - name: Check performance baseline budgets (offline)
         shell: bash
         run: cargo test --locked --offline --test performance_baseline -- --nocapture
@@ -45,26 +36,6 @@ jobs:
       - name: Run baseline benches (offline)
         shell: bash
         run: cargo test --locked --offline --bench baseline -- --nocapture || cargo test --locked --offline --benches -- --nocapture
-      - name: Report failure via issue
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const logPath = path.join(process.env.RUNNER_TEMP || '/tmp', 'offline.log');
-            let log = '';
-            try { 
-              const content = fs.readFileSync(logPath, 'utf8');
-              // Get last 500 lines and grep errors
-              const lines = content.split('\n');
-              const tail = lines.slice(-600).join('\n');
-              const errors = lines.filter(l => l.includes('error') || l.includes('FAILED') || l.includes('failed')).slice(-100).join('\n');
-              log = 'TAIL:\n' + tail.slice(-30000) + '\n\nERRORS:\n' + errors.slice(-10000);
-            } catch(e) { log = 'no log: '+e + ' path='+logPath; }
-            const title = `ci offline failed ${context.sha.slice(0,7)} ${process.env.RUNNER_OS || ''}`;
-            const body = '```\n' + log.slice(-50000) + '\n```';
-            await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body});
   test:
     runs-on: ubuntu-latest
     strategy: {fail-fast: false, matrix: {postgres: [16,18]}}
@@ -88,21 +59,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          cargo test --locked --offline -- --nocapture 2>&1 | tee "$RUNNER_TEMP/offline_pg.log"
-      - name: Dump PG log on failure
-        if: failure()
-        shell: bash
-        run: |
-          tail -n 500 "$RUNNER_TEMP/offline_pg.log" || true
-          grep -n "error\[" "$RUNNER_TEMP/offline_pg.log" | tail -n 50 || true
-          cargo check --offline 2>&1 | tail -n 100 || true
-      - name: Upload PG log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: offline-pg-log-${{ matrix.postgres }}
-          path: ${{ runner.temp }}/offline_pg.log
-          retention-days: 1
+          cargo test --locked --offline -- --nocapture 2>&1 | tee "${RUNNER_TEMP}/offline_pg.log"
       - name: Test with connector enabled
         shell: bash
         run: cargo test --locked --offline --features postgres -- --nocapture
@@ -151,22 +108,3 @@ jobs:
       - name: Run PG Prisma differential (PG16/18)
         shell: bash
         run: cargo test --locked --offline --features postgres --test prisma_diff_postgres -- --ignored -- --nocapture
-      - name: Report PG failure via issue
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const logPath = path.join(process.env.RUNNER_TEMP || '/tmp', 'offline_pg.log');
-            let log = '';
-            try { 
-              const content = fs.readFileSync(logPath, 'utf8');
-              const lines = content.split('\n');
-              const tail = lines.slice(-600).join('\n');
-              const errors = lines.filter(l => l.includes('error') || l.includes('FAILED') || l.includes('failed')).slice(-100).join('\n');
-              log = 'TAIL:\n' + tail.slice(-30000) + '\n\nERRORS:\n' + errors.slice(-10000);
-            } catch(e) { log = 'no log: '+e + ' path='+logPath; }
-            const title = `ci PG failed ${context.sha.slice(0,7)} pg${process.env.matrix_postgres || ''}`;
-            const body = '```\n' + log.slice(-50000) + '\n```';
-            await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body});
