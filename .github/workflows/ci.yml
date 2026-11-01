@@ -29,8 +29,10 @@ jobs:
           CODE=${PIPESTATUS[0]}
           if [ $CODE -ne 0 ]; then
             echo "::error::PG_FEAT_FAILED exit $CODE"
-            TAIL=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/pg_feat.log | tail -n 120 | tr '%' '%' | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            TAIL=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/pg_feat.log | grep -E "FAILED|failures:|---- |panicked|thread.*panicked|assertion|error:" | tail -n 100 | sed 's/%/%25/g' | tr '\n' '\r' | sed 's/\r/%0A/g')
             echo "::error::$TAIL"
+            FULL=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/pg_feat.log | tail -n 300 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "::error::$FULL"
             exit $CODE
           fi
           exit 0
