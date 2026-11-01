@@ -1270,16 +1270,9 @@ pub fn validate_relations(schema: &Schema) -> Result<(), Diagnostic> {
             if is_self && relation.relation_name.is_none() {
                 return Err(fail("self relations require an explicit name"));
             }
-            let other = match inverse_relation(model, relation, target) {
-                Some(o) => o,
-                None => {
-                    // Allow many-to-one without back-reference (e.g. Post.author without User.posts) for multifile P2
-                    if !relation.list && relation.foreign_key.is_some() {
-                        continue;
-                    }
-                    return Err(fail("relation requires one unambiguous inverse with the same name"));
-                }
-            };
+            let other = inverse_relation(model, relation, target).ok_or_else(|| {
+                fail("relation requires one unambiguous inverse with the same name")
+            })?;
             let expected = if is_self { 2 } else { 1 };
             if model
                 .relations

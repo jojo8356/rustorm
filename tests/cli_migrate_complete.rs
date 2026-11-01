@@ -484,7 +484,7 @@ fn multifile_schema_via_directory() {
     // create directory with two .rsm files
     let schema_dir = t.path("schemas");
     fs::create_dir_all(&schema_dir).unwrap();
-    fs::write(schema_dir.join("a.rsm"), "datasource db {\n provider = \"postgresql\"\n url = env(\"DATABASE_URL\")\n}\nmodel User {\n id Int @id @default(autoincrement())\n email String @unique\n}\n").unwrap();
+    fs::write(schema_dir.join("a.rsm"), "datasource db {\n provider = \"postgresql\"\n url = env(\"DATABASE_URL\")\n}\nmodel User {\n id Int @id @default(autoincrement())\n email String @unique\n posts Post[]\n}\n").unwrap();
     fs::write(schema_dir.join("b.rsm"), "model Post {\n id Int @id @default(autoincrement())\n title String\n authorId Int\n author User @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade)\n}\n").unwrap();
     // validate via directory should succeed
     let out = t.run(&["validate", "--schema", "schemas"]);
