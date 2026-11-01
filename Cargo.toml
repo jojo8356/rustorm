@@ -21,3 +21,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "rustorm"
 path = "src/main.rs"
+
+[[bench]]
+name = "baseline"
+harness = false

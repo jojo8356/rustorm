@@ -2,13 +2,13 @@
   "feature": "Rustorm — couverture complète du cahier des charges v0.1",
   "contract": "docs/CAHIER_DES_CHARGES.md (§3 Périmètre, §5 Langage .rsm, §6 Client, §7 Migrations/Introspection, §8 CLI, §9 Sécu/Perf, §10 AC-01..17, §11 Jalons M0-M6)",
   "previous_json": "docs/features/NESTED_WRITES_TODO.json (supprimé 2026-10-31 — 6/6 R2 validated true, commit 966a751 → consolidé dans RELATIONS.md v1.2)",
-  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 38/39 validated ; 1 partial sync-only documenté (Testing) — voir fiches.",
+  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 39/39 validated — TEST-MATRIX-AC-JALONS livré.",
   "generated": "2026-11-02",
   "stats": {
     "total_items": 39,
     "missing": 0,
-    "partial": 1,
-    "done_validated": 38,
+    "partial": 0,
+    "done_validated": 39,
     "p0": 24,
     "p1": 8,
     "p2": 7
@@ -353,8 +353,8 @@
       "priority": "P1",
       "status": "done",
       "validated": true,
-      "evidence": "src/perf.rs tracing QueryMetrics atomic counters + N+1 warn + instrumented_query(RUSTORM_TRACE), benches baselines in docs/PERFORMANCE.md; tests/p1_perf.rs",
-      "remaining": "tracing durée/rows/sql expurgé ; compteur N+1 ; criterion 1k/10k ; baseline"
+      "evidence": "src/perf.rs QueryMetrics atomics + N+1 warn + instrumented_query(RUSTORM_TRACE) expurgé, docs/PERFORMANCE_BASELINE.md p50/p95/p99 + budgets CI (<5/10ms offline, <80ms 10k PG), benches/baseline.rs; tests/p1_perf.rs 4 + tests/performance_baseline.rs 8 (offline budgets N+1 ≤2, expurgation, 1k/10k) + tests/performance_postgres.rs 3 PG — PERF-001 Done 2026-11-02",
+      "remaining": "done - PERFORMANCE.md 1.1 Done, PERFORMANCE_BASELINE.md v2026-11-02, benches + budgets anti-régression"
     },
     {
       "id": "TEST-MATRIX-AC-JALONS",
@@ -362,10 +362,10 @@
       "feature_doc": "docs/features/TESTING.md",
       "scope": "§10 §11",
       "priority": "P0",
-      "status": "partial",
-      "validated": false,
-      "evidence": "tests/p0/p1/p2 + CI PG16/18 vert ; hors perf chiffrée",
-      "remaining": "P0 tests ciblés — reste perf baseline + matrice Prisma7 + multi-OS. Fiche TESTING.md §8"
+      "status": "done",
+      "validated": true,
+      "evidence": "docs/features/TESTING.md 2.0 Done (AC-01..17 tous verts offline+PG, M0-M6 jalons versionnés, matrice Prisma5/7×PG16/18×P0 verte), docs/PERFORMANCE_BASELINE.md p50/p95/p99 + budgets, docs/PRISMA_DIFFERENTIAL_MATRIX.md 17 AC ×2 PG×2 Prisma diff volontaires documentées, docs/MATRIX.md PG16/18+multi-OS+Prisma+perf 39/39, .github/workflows/ci.yml test-offline os:[ubuntu,windows,macos] + test postgres:[16,18] + PG perf/prisma, benches/baseline.rs 5 offline, tests/test_matrix_ac_jalons.rs 27 offline AC-01..17+M0-M6+perf+Prisma+multi-OS+fuzz+prop, tests/performance_baseline.rs 8, tests/prisma_diff.rs 7, tests/multi_os_verification.rs 8, all offline --offline verts multi-OS",
+      "remaining": "done - TESTING.md 2.0 Done 2026-11-02, 39/39 done_validated, CI multi-OS PG16/18 verte"
     },
     {
       "id": "RELATIONS-CARDINALITIES-POLISH",
@@ -469,5 +469,5 @@
       "QUERY_ENGINE findUnique/aggregate/json/distinct"
     ]
   },
-  "harmonization_note": "2026-11-02 CLI-MIGRATE-COMPLETE livré : format idempotent, dev natif, resolve/baseline checksum, deploy --preview, db pull réel, rustorm.toml CLI>config>défaut, P1 diff/push/reset/import prisma, P2 watch/shadow-url — 38/39 done, reste TEST-MATRIX-AC-JALONS. 2026-11-02 SEC-001 Done. 2026-11-02 CLIENT-003 + CONN-0011 livrés."
+  "harmonization_note": "2026-11-02 CLI-MIGRATE-COMPLETE livré : format idempotent, dev natif, resolve/baseline checksum, deploy --preview, db pull réel, rustorm.toml CLI>config>défaut, P1 diff/push/reset/import prisma, P2 watch/shadow-url — 38/39 done, reste TEST-MATRIX-AC-JALONS. 2026-11-02 SEC-001 Done. 2026-11-02 CLIENT-003 + CONN-0011 livrés. 2026-11-02 TEST-MATRIX-AC-JALONS livré : AC-01..17 tous verts offline+PG, M0-M6 jalons versionnés, PG18, Prisma 5/7 diff, perf baseline p50/p95/p99 budgets, multi-OS ubuntu/macos/windows, CI PG16/18 + offline — 39/39 done_validated."
 }

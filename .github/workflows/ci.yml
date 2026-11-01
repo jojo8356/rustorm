@@ -1,6 +1,24 @@
 name: Rust tests
 on: [push, pull_request]
 jobs:
+  test-offline:
+    runs-on: ${{ matrix.os }}
+    strategy: {fail-fast: false, matrix: {os: [ubuntu-latest, windows-latest, macos-latest]}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Fetch deps for offline tests
+        run: |
+          cargo update || true
+          cargo fetch || true
+      - name: Test without optional connector (offline, multi-OS)
+        run: cargo test --locked --offline -- --nocapture
+      - name: Check performance baseline budgets (offline)
+        run: cargo test --locked --offline --test performance_baseline -- --nocapture
+      - name: Check AC matrix + Prisma diff + multi-OS (offline)
+        run: cargo test --locked --offline --test test_matrix_ac_jalons --test prisma_diff --test multi_os_verification -- --nocapture
+      - name: Run baseline benches (offline)
+        run: cargo test --locked --offline --bench baseline -- --nocapture || cargo test --locked --offline --benches -- --nocapture
   test:
     runs-on: ubuntu-latest
     strategy: {fail-fast: false, matrix: {postgres: [16,18]}}
@@ -49,3 +67,7 @@ jobs:
         run: cargo test --locked --offline --features sqlx --test connector_sqlx -- --ignored -- --nocapture
       - name: Run shadow database planning tests
         run: cargo test --locked --offline --features postgres --test shadow_postgres -- --ignored -- --nocapture
+      - name: Run PG performance baseline (p50/p95/p99 budgets)
+        run: cargo test --locked --offline --features postgres --test performance_postgres -- --ignored -- --nocapture
+      - name: Run PG Prisma differential (PG16/18)
+        run: cargo test --locked --offline --features postgres --test prisma_diff_postgres -- --ignored -- --nocapture
