@@ -90,7 +90,6 @@ pub enum Error {
     Timeout,
     Cancelled,
     PoolTimeout,
-    /// Backwards compat: NotFound without code is `NotFound { code: None }`
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
