@@ -1,5 +1,6 @@
 name: Rust tests
 on: [push, pull_request]
+permissions: write-all
 jobs:
   test-offline:
     runs-on: ${{ matrix.os }}
