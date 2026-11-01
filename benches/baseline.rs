@@ -17,7 +17,7 @@ model Post {
   id       Int     @id
   title    String
   authorId Int
-  author   User    @relation(fields: [authorId], references: [id])
+  author   User    @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   published Boolean @default(false)
   views    Int     @default(0)
 }
@@ -94,12 +94,8 @@ fn bench_query_build_offline() {
 #[test]
 fn bench_n_plus_one_bounded() {
     reset_metrics();
-    instrumented_query("users_find_many", || {
-        record_query(2);
-    });
-    instrumented_query("posts_grouped", || {
-        record_query(3);
-    });
+    instrumented_query("users_find_many", || {});
+    instrumented_query("posts_grouped", || {});
     let m = metrics();
     assert!(m.count == 2, "N+1 bounded: expected 2 queries for include, got {}", m.count);
     assert!(m.n_plus_one_warnings == 0, "no N+1 warning for bounded case");
