@@ -38,7 +38,8 @@ jobs:
             const fs = require('fs');
             let log = '';
             try { log = fs.readFileSync('/tmp/offline.log', 'utf8'); } catch(e) { log = 'no log file: ' + e.message; }
-            const body = log.substring(0, 60000);
+            // post tail where failures are, not head
+            const body = log.length > 60000 ? log.substring(log.length - 60000) : log;
             await github.rest.issues.create({
               owner: 'jojo8356',
               repo: 'rustorm',
