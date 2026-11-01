@@ -278,7 +278,8 @@ pub struct AsyncPool {
     config: PoolConfig,
     inner: deadpool::managed::Pool<PgManager>,
 }
-struct PgManager { url: String }
+pub struct PgManager { url: String }
+pub type AsyncPooledConnection = deadpool::managed::Object<PgManager>;
 impl deadpool::managed::Manager for PgManager {
     type Type = Connection;
     type Error = Error;
@@ -300,7 +301,7 @@ impl AsyncPool {
         Self { config: cfg, inner }
     }
     pub fn max_connections(&self) -> usize { self.config.max_connections }
-    pub async fn get(&self) -> Result<deadpool::managed::Object<PgManager>, Error> {
+    pub async fn get(&self) -> Result<AsyncPooledConnection, Error> {
         self.inner.get().await.map_err(|_| Error::PoolTimeout)
     }
     pub fn metrics(&self) -> PoolMetrics {
