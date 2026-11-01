@@ -22,20 +22,7 @@ jobs:
       - name: Test without optional connector
         run: cargo test --locked --offline -- --nocapture
       - name: Test with connector enabled
-        shell: bash
-        run: |
-          set +e
-          cargo test --locked --offline --features postgres -- --nocapture 2>&1 | tee /tmp/pg_feat.log
-          CODE=${PIPESTATUS[0]}
-          if [ $CODE -ne 0 ]; then
-            echo "::error::PG_FEAT_FAILED exit $CODE"
-            TAIL=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/pg_feat.log | grep -E "FAILED|failures:|---- |panicked|thread.*panicked|assertion|error:" | tail -n 100 | sed 's/%/%25/g' | tr '\n' '\r' | sed 's/\r/%0A/g')
-            echo "::error::$TAIL"
-            FULL=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/pg_feat.log | tail -n 300 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
-            echo "::error::$FULL"
-            exit $CODE
-          fi
-          exit 0
+        run: cargo test --locked --offline --features postgres -- --nocapture
       - name: Run real PostgreSQL integration tests
         run: cargo test --locked --offline --features postgres --test postgres -- --ignored -- --nocapture
       - name: Run PostgreSQL migration integration tests
@@ -52,5 +39,7 @@ jobs:
         run: cargo test --locked --offline --features postgres --test nested_create_postgres -- --ignored -- --nocapture
       - name: Run PostgreSQL nested disconnect tests
         run: cargo test --locked --offline --features postgres --test nested_disconnect_postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL transaction integration tests
+        run: cargo test --locked --offline --features postgres --test transactions_postgres -- --ignored -- --nocapture
       - name: Run shadow database planning tests
         run: cargo test --locked --offline --features postgres --test shadow_postgres -- --ignored -- --nocapture

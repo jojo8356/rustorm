@@ -2,13 +2,13 @@
   "feature": "Rustorm — couverture complète du cahier des charges v0.1",
   "contract": "docs/CAHIER_DES_CHARGES.md (§3 Périmètre, §5 Langage .rsm, §6 Client, §7 Migrations/Introspection, §8 CLI, §9 Sécu/Perf, §10 AC-01..17, §11 Jalons M0-M6)",
   "previous_json": "docs/features/NESTED_WRITES_TODO.json (supprimé 2026-10-31 — 6/6 R2 validated true, commit 966a751 → consolidé dans RELATIONS.md v1.2)",
-  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 34/39 validated ; 5 partial sync-only documentés (CLI/Transactions/Connectors/Sécu/Testing) — voir fiches.",
-  "generated": "2026-11-01",
+  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 35/39 validated ; 4 partial sync-only documentés (CLI/Connectors/Sécu/Testing) — voir fiches.",
+  "generated": "2026-11-02",
   "stats": {
     "total_items": 39,
     "missing": 0,
-    "partial": 5,
-    "done_validated": 34,
+    "partial": 4,
+    "done_validated": 35,
     "p0": 24,
     "p1": 8,
     "p2": 7
@@ -241,10 +241,10 @@
       "feature_doc": "docs/features/TRANSACTIONS.md",
       "scope": "§6.4 §9",
       "priority": "P0",
-      "status": "partial",
-      "validated": false,
-      "evidence": "src/postgres.rs Transaction sync + savepoint + Drop rollback ; sync-only livré, async documenté P1",
-      "remaining": "P0 livré sync-only (CDC §3) — reste async tokio + pool + isolation/timeout/retry. Fiche TRANSACTIONS.md §3. Non bloquant v0.1"
+      "status": "done",
+      "validated": true,
+      "evidence": "src/postgres.rs AsyncPool deadpool+tokio Pool/PoolConfig/TransactionOptions/IsolationLevel, begin_with_options/isolation/timeout/retry, cancel via SET LOCAL statement_timeout, Error 23505/23503/P0002 mapping + constraint/table extraction, metrics + redacted log; tests/transactions.rs 8 offline + tests/transactions_postgres.rs 9 PG (AC-Tx-01/02/03 VAL-TX01/02/03)",
+      "remaining": "done - see evidence"
     },
     {
       "id": "TX-ERRORS-TYPED",
@@ -469,5 +469,5 @@
       "QUERY_ENGINE findUnique/aggregate/json/distinct"
     ]
   },
-  "harmonization_note": "2026-11-01 harmonisation juridique/doc : TODO annonçait 39/39 done (0 partiel) alors que 5 fiches s'auto-déclarent partielles. On aligne sur réalité : 34 done + 5 partial sync-only. Aucun code changé, promesse conforme CDC §3 P0 sync-only."
+  "harmonization_note": "2026-11-02 CLIENT-003 livré : TX-ASYNC-POOL done (tokio deadpool pool borné + transaction isolation/timeout/retry + erreurs structurées). Reste 4 partial sync-only. Ancienne note 2026-11-01 : TODO annonçait 39/39 done (0 partiel) alors que 5 fiches s'auto-déclarent partielles — aligné 34+5."
 }
