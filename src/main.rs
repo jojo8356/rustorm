@@ -267,11 +267,11 @@ fn run() -> Result<(), (i32, String)> {
     }
     if args[0] == "db" {
         // P2: db import --sql FILE --to FILE [--force]
-        if args.len() >= 3 && args[1] == "import" && args[2] == "--sql" {
+        if args.len() >= 2 && args[1] == "import" {
             let mut from = None::<PathBuf>;
             let mut to_cli: Option<PathBuf> = None;
             let mut force = false;
-            let mut i = 3;
+            let mut i = 2;
             while i < args.len() {
                 match args[i].as_str() {
                     "--sql" => { i+=1; if i>=args.len() { return Err(fail("--sql requires path")); } from = Some(PathBuf::from(&args[i])); },
