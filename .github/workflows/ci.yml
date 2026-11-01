@@ -70,16 +70,25 @@ jobs:
           test "${{ steps.cargo_test.outcome }}" == "success" && test "${{ steps.perf.outcome }}" == "success" && test "${{ steps.matrix.outcome }}" == "success" && test "${{ steps.benches.outcome }}" == "success"
       - name: Report offline diagnostics via issue
         if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs=require('fs'); const path=require('path'); const {execSync}=require('child_process');
-            const tmp=process.env.RUNNER_TEMP; let body='diag '+process.env.GITHUB_SHA.slice(0,7)+' '+process.env.RUNNER_OS+'\n';
-            for(const f of ['cargo_test.log','perf.log','matrix.log','benches.log']){
-              try{ const log=fs.readFileSync(path.join(tmp,f),'utf8'); body+='\n--- '+f+' tail --\n'+log.split('\n').slice(-200).join('\n'); }catch(e){ body+='\nno '+f; }
-            }
-            body=body.slice(-60000);
-            await github.rest.issues.create({owner:context.repo.owner,repo:context.repo.repo,title:`ci diag ${process.env.GITHUB_SHA.slice(0,7)} ${process.env.RUNNER_OS}`,body});
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "diag ${GITHUB_SHA:0:7} ${RUNNER_OS}" > /tmp/diag.txt
+          for f in cargo_test.log perf.log matrix.log benches.log; do
+            echo "--- $f tail ---" >> /tmp/diag.txt
+            cat "$RUNNER_TEMP/$f" 2>&1 | tail -n 200 >> /tmp/diag.txt || echo "no $f" >> /tmp/diag.txt
+          done
+          echo "--- cargo_test fresh grep FAILED ---" >> /tmp/diag.txt
+          cargo test --locked --offline -- --nocapture 2>&1 | grep -E "FAILED|test result|failures:" | tail -n 100 >> /tmp/diag.txt || true
+          echo "--- perf fresh ---" >> /tmp/diag.txt
+          cargo test --locked --offline --test performance_baseline -- --nocapture 2>&1 | tail -n 100 >> /tmp/diag.txt || true
+          echo "--- matrix fresh ---" >> /tmp/diag.txt
+          cargo test --locked --offline --test test_matrix_ac_jalons --test prisma_diff -- --nocapture 2>&1 | tail -n 200 >> /tmp/diag.txt || true
+          echo "--- benches fresh ---" >> /tmp/diag.txt
+          cargo test --locked --offline --bench baseline -- --nocapture 2>&1 | tail -n 200 >> /tmp/diag.txt || true
+          cat /tmp/diag.txt
+          gh issue create --title "ci diag ${GITHUB_SHA:0:7} ${RUNNER_OS}" --body-file /tmp/diag.txt || true
   test:
     runs-on: ubuntu-latest
     strategy: {fail-fast: false, matrix: {postgres: [16,18]}}
@@ -116,14 +125,13 @@ jobs:
         run: test "${{ steps.cargo_test_pg.outcome }}" == "success"
       - name: Report PG diag
         if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs=require('fs'); const p=require('path');
-            let body='diag PG '+process.env.GITHUB_SHA.slice(0,7)+'\n';
-            try{ body+=fs.readFileSync(p.join(process.env.RUNNER_TEMP,'cargo_test.log'),'utf8').slice(-10000); }catch(e){ body+='no log'; }
-            body=body.slice(-60000);
-            await github.rest.issues.create({owner:context.repo.owner,repo:context.repo.repo,title:`ci PG diag ${process.env.GITHUB_SHA.slice(0,7)}`,body});
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat "$RUNNER_TEMP/cargo_test.log" 2>&1 | tail -n 400 > /tmp/pg_diag.txt || echo "no pg log" > /tmp/pg_diag.txt
+          cargo test --locked --offline -- --nocapture 2>&1 | tail -n 200 >> /tmp/pg_diag.txt || true
+          gh issue create --title "ci PG diag ${GITHUB_SHA:0:7}" --body-file /tmp/pg_diag.txt || true
       - name: Test with connector enabled
         shell: bash
         run: cargo test --locked --offline --features postgres -- --nocapture
