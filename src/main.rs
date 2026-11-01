@@ -631,9 +631,9 @@ fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
             return Err(fail("schema file must have .rsm extension or be a directory of .rsm files"));
         }
         let input = read_schema_input(&schema_path)
-            .map_err(|e| fail(format!("{:?}: {e}", schema_path)))?;
+            .map_err(|e| fail(format!("{:?}: {:?}", schema_path, e)))?;
         let schema =
-            schema::parse(&input).map_err(|e| fail(format!("{:?}:{e}", schema_path)))?;
+            schema::parse(&input).map_err(|e| fail(format!("{:?}:{:?}", schema_path, e)))?;
         // The marker is not written; output_path constrains creation to the current project.
         let safe = output_path(&dir.join(".rustorm-path-check"))?;
         let safe_dir = safe
