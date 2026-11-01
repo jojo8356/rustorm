@@ -3,9 +3,9 @@
 | Métadonnée | Valeur |
 |---|---|
 | Identifiant | `TEST-001` |
-| Statut | **Done — matrice AC-01..17 + M0-M6 + PG18 + Prisma diff + CI verte** |
+| Statut | **Done — matrice AC-01..17 + M0-M6 + PG18 + Prisma diff + CI verte (5/5)** |
 | Version | 2.0 |
-| Date | 2 novembre 2026 |
+| Date | 2 novembre 2026 — run `41319422244` `043fbb7` `success` (ubuntu/macos/windows + PG16/18) |
 | Références | [Cahier §10–§11](../CAHIER_DES_CHARGES.md#10-tests-et-critères-dacceptation-par-palier), `docs/MATRIX.md`, `docs/PERFORMANCE_BASELINE.md`, `docs/PRISMA_DIFFERENTIAL_MATRIX.md`, `RUSTORM_TODO.json` TEST-MATRIX-AC-JALONS |
 | Priorité | P0 |
 
