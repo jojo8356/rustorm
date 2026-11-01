@@ -288,6 +288,13 @@ pub mod mock {
         fn begin(&mut self) -> Result<Transaction<'_>, Error> {
             Err(Error::InvalidInput("mock does not support transactions"))
         }
+        fn execute_raw(&mut self, sql: &str) -> Result<(), Error> {
+            if let Some(msg) = self.fail_next.take() {
+                return Err(Error::Invalid(msg));
+            }
+            self.executed.push(sql.to_string());
+            Ok(())
+        }
     }
 
     impl MockConnector {

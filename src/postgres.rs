@@ -136,11 +136,14 @@ pub trait Connector {
     fn query(&mut self, q: &crate::query::CompiledQuery) -> Result<Vec<crate::row::Row>, Error>;
     fn execute(&mut self, q: &crate::query::CompiledQuery) -> Result<u64, Error>;
     fn begin(&mut self) -> Result<Transaction<'_>, Error>;
+    fn execute_raw(&mut self, sql: &str) -> Result<(), Error>;
+    fn is_healthy(&self) -> bool { true }
 }
 impl Connector for Connection {
     fn query(&mut self, q: &crate::query::CompiledQuery) -> Result<Vec<crate::row::Row>, Error> { self.query(q) }
     fn execute(&mut self, q: &crate::query::CompiledQuery) -> Result<u64, Error> { self.execute(q) }
     fn begin(&mut self) -> Result<Transaction<'_>, Error> { self.begin() }
+    fn execute_raw(&mut self, sql: &str) -> Result<(), Error> { self.execute_raw(sql) }
 }
 impl Error {
     /// SQLSTATE code if the server supplied one (e.g. "23505" for unique violation).

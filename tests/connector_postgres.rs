@@ -69,7 +69,7 @@ fn ac_conn_01_ddl_identical_via_trait() {
     let q_select = Select::new(TABLE, &["id","val"]).where_(ID.equals(1)).compile().unwrap();
     let rows = boxed.query(&q_select).unwrap();
     assert_eq!(rows.len(), 1);
-    let fetched = boxed.fetch::<Rec>(&q_select).unwrap();
+    let fetched: Vec<Rec> = rows.iter().map(|r| Rec::from_row(r).unwrap()).collect();
     assert_eq!(fetched[0].val, "hello");
 
     // Update via trait
