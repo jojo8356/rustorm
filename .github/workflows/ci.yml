@@ -15,15 +15,20 @@ jobs:
           cargo fetch || true
       - name: Test without optional connector (offline, multi-OS)
         shell: bash
-        run: cargo test --locked --offline -- --nocapture 2>&1 | tee "$RUNNER_TEMP/offline.log"; test ${PIPESTATUS[0]} -eq 0
+        run: |
+          set -o pipefail
+          cargo test --locked --offline -- --nocapture 2>&1 | tee "$RUNNER_TEMP/offline.log"
       - name: Dump log on failure
         if: failure()
         shell: bash
         run: |
-          echo "=== offline.log tail ==="
-          tail -n 500 "$RUNNER_TEMP/offline.log" || cat "$RUNNER_TEMP/offline.log" || true
-          echo "=== cargo check offline ==="
-          cargo check --offline 2>&1 | tail -n 200 || true
+          echo "=== offline.log tail 500 ==="
+          tail -n 500 "$RUNNER_TEMP/offline.log" || true
+          echo "=== grep error ==="
+          grep -n "error\[" "$RUNNER_TEMP/offline.log" | tail -n 50 || true
+          grep -n "FAILED\|failed" "$RUNNER_TEMP/offline.log" | tail -n 50 || true
+          echo "=== cargo check ==="
+          cargo check --offline 2>&1 | grep -E "error|Error" | tail -n 100 || true
       - name: Upload offline log on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -51,10 +56,14 @@ jobs:
             let log = '';
             try { 
               const content = fs.readFileSync(logPath, 'utf8');
-              log = content.split('\n').slice(-300).join('\n').slice(-50000);
+              // Get last 500 lines and grep errors
+              const lines = content.split('\n');
+              const tail = lines.slice(-600).join('\n');
+              const errors = lines.filter(l => l.includes('error') || l.includes('FAILED') || l.includes('failed')).slice(-100).join('\n');
+              log = 'TAIL:\n' + tail.slice(-30000) + '\n\nERRORS:\n' + errors.slice(-10000);
             } catch(e) { log = 'no log: '+e + ' path='+logPath; }
             const title = `ci offline failed ${context.sha.slice(0,7)} ${process.env.RUNNER_OS || ''}`;
-            const body = '```\n' + log + '\n```';
+            const body = '```\n' + log.slice(-50000) + '\n```';
             await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body});
   test:
     runs-on: ubuntu-latest
@@ -77,11 +86,16 @@ jobs:
           cargo fetch || true
       - name: Test without optional connector
         shell: bash
-        run: cargo test --locked --offline -- --nocapture 2>&1 | tee "$RUNNER_TEMP/offline_pg.log"; test ${PIPESTATUS[0]} -eq 0
+        run: |
+          set -o pipefail
+          cargo test --locked --offline -- --nocapture 2>&1 | tee "$RUNNER_TEMP/offline_pg.log"
       - name: Dump PG log on failure
         if: failure()
         shell: bash
-        run: tail -n 500 "$RUNNER_TEMP/offline_pg.log" || cat "$RUNNER_TEMP/offline_pg.log" || true
+        run: |
+          tail -n 500 "$RUNNER_TEMP/offline_pg.log" || true
+          grep -n "error\[" "$RUNNER_TEMP/offline_pg.log" | tail -n 50 || true
+          cargo check --offline 2>&1 | tail -n 100 || true
       - name: Upload PG log on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -148,8 +162,11 @@ jobs:
             let log = '';
             try { 
               const content = fs.readFileSync(logPath, 'utf8');
-              log = content.split('\n').slice(-300).join('\n').slice(-50000);
+              const lines = content.split('\n');
+              const tail = lines.slice(-600).join('\n');
+              const errors = lines.filter(l => l.includes('error') || l.includes('FAILED') || l.includes('failed')).slice(-100).join('\n');
+              log = 'TAIL:\n' + tail.slice(-30000) + '\n\nERRORS:\n' + errors.slice(-10000);
             } catch(e) { log = 'no log: '+e + ' path='+logPath; }
             const title = `ci PG failed ${context.sha.slice(0,7)} pg${process.env.matrix_postgres || ''}`;
-            const body = '```\n' + log + '\n```';
+            const body = '```\n' + log.slice(-50000) + '\n```';
             await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body});
