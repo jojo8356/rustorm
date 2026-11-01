@@ -16,4 +16,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y libpq-dev
       - name: Test without optional connector
-        run: cargo test --locked -- --nocapture
+        run: |
+          set +e
+          cargo test --locked -- --nocapture > /tmp/offline.log 2>&1
+          s=$?
+          cat /tmp/offline.log
+          if [ $s -ne 0 ]; then
+            head -n 120 /tmp/offline.log > /tmp/head.log
+            while IFS= read -r line; do
+              safe=$(echo "$line" | sed 's/%/%25/g' | tr -d '\r')
+              echo "::error::$safe"
+            done < /tmp/head.log
+            exit $s
+          fi
