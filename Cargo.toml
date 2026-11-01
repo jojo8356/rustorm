@@ -5,6 +5,10 @@ edition = "2021"
 description = "Rust-first schema and typed query foundation"
 license = "MIT OR Apache-2.0"
 
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "rt"] }
+deadpool = { version = "0.12", features = ["managed"] }
+
 [features]
 default = []
 postgres = []
