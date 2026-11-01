@@ -309,10 +309,9 @@ impl AsyncPool {
     }
     pub fn status(&self) -> PoolMetrics { self.metrics() }
     /// Async interactive transaction: commit if Ok, rollback if Err, panic → rollback (§6.4 VAL-TX01)
-    pub async fn transaction<F, T>(&self, opts: TransactionOptions, f: F) -> Result<T, Error>
-    where F: FnOnce(&mut Transaction<'_>) -> Result<T, Error> + Send + 'static, T: Send + 'static {
+    pub async fn transaction<F, T>(&self, opts: TransactionOptions, mut f: F) -> Result<T, Error>
+    where F: FnMut(&mut Transaction<'_>) -> Result<T, Error> + Send + 'static, T: Send + 'static {
         let mut conn = self.get().await.map_err(|_| Error::PoolTimeout)?;
-        // Use spawn_blocking to keep libpq off the async runtime
         let opts2 = opts.clone();
         let res = tokio::task::spawn_blocking(move || {
             let mut_ref: &mut Connection = &mut *conn;
