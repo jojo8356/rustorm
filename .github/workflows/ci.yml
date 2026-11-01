@@ -17,13 +17,17 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libpq-dev
       - name: Test without optional connector
         run: |
-          cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/offline.log
-          s=${PIPESTATUS[0]}
+          set +e
+          cargo test --locked --offline -- --nocapture > /tmp/offline.log 2>&1
+          s=$?
           cat /tmp/offline.log
-          exit $s
-      - name: Upload offline log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: offline-log-${{ matrix.postgres }}
-          path: /tmp/offline.log
+          if [ $s -ne 0 ]; then
+            head -n 120 /tmp/offline.log > /tmp/head.log
+            # emit each line as annotation
+            while IFS= read -r line; do
+              # escape % and newlines for annotation
+              safe=$(echo "$line" | sed 's/%/%25/g' | tr -d '\r')
+              echo "::error::$safe"
+            done < /tmp/head.log
+            exit $s
+          fi
