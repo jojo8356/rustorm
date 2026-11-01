@@ -8,10 +8,12 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "rt"] }
 deadpool = { version = "0.12", features = ["managed", "rt_tokio_1"] }
+sqlx = { version = "0.8", optional = true, features = ["runtime-tokio", "tls-rustls", "postgres"] }
 
 [features]
 default = []
 postgres = []
+sqlx = ["postgres", "dep:sqlx", "tokio/time"]
 
 [lib]
 path = "src/lib.rs"

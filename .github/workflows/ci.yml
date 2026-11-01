@@ -23,6 +23,8 @@ jobs:
         run: cargo test --locked --offline -- --nocapture
       - name: Test with connector enabled
         run: cargo test --locked --offline --features postgres -- --nocapture
+      - name: Test with sqlx connector enabled
+        run: cargo test --locked --offline --features sqlx -- --nocapture
       - name: Run real PostgreSQL integration tests
         run: cargo test --locked --offline --features postgres --test postgres -- --ignored -- --nocapture
       - name: Run PostgreSQL migration integration tests
@@ -41,5 +43,9 @@ jobs:
         run: cargo test --locked --offline --features postgres --test nested_disconnect_postgres -- --ignored -- --nocapture
       - name: Run PostgreSQL transaction integration tests
         run: cargo test --locked --offline --features postgres --test transactions_postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL connector integration tests
+        run: cargo test --locked --offline --features postgres --test connector_postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL sqlx connector tests
+        run: cargo test --locked --offline --features sqlx --test connector_sqlx -- --ignored -- --nocapture
       - name: Run shadow database planning tests
         run: cargo test --locked --offline --features postgres --test shadow_postgres -- --ignored -- --nocapture

@@ -2,13 +2,13 @@
   "feature": "Rustorm — couverture complète du cahier des charges v0.1",
   "contract": "docs/CAHIER_DES_CHARGES.md (§3 Périmètre, §5 Langage .rsm, §6 Client, §7 Migrations/Introspection, §8 CLI, §9 Sécu/Perf, §10 AC-01..17, §11 Jalons M0-M6)",
   "previous_json": "docs/features/NESTED_WRITES_TODO.json (supprimé 2026-10-31 — 6/6 R2 validated true, commit 966a751 → consolidé dans RELATIONS.md v1.2)",
-  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 35/39 validated ; 4 partial sync-only documentés (CLI/Connectors/Sécu/Testing) — voir fiches.",
+  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 36/39 validated ; 3 partial sync-only documentés (CLI/Sécu/Testing) — voir fiches.",
   "generated": "2026-11-02",
   "stats": {
     "total_items": 39,
     "missing": 0,
-    "partial": 4,
-    "done_validated": 35,
+    "partial": 3,
+    "done_validated": 36,
     "p0": 24,
     "p1": 8,
     "p2": 7
@@ -263,10 +263,10 @@
       "feature_doc": "docs/features/CONNECTORS.md",
       "scope": "§3 §6 P1",
       "priority": "P0",
-      "status": "partial",
-      "validated": false,
-      "evidence": "src/postgres.rs libpq sync PG16/18 via CI ; 1 connecteur livré",
-      "remaining": "P0 livré 1 connecteur sync libpq — reste trait Connector + sqlx async + TLS. Fiche CONNECTORS.md §3"
+      "status": "done",
+      "validated": true,
+      "evidence": "src/postgres.rs Connector trait + src/connector.rs Provider/SslMode/TlsConfig/CapabilityMatrix/PgVersionMatrix + MockConnector + SqlxConnector (sqlx feature runtime-tokio tls-rustls) + TLS verify-full/disable_for_local/require + CI PG16/18 matrix 16+18 verts + docs/MATRIX.md",
+      "remaining": "done - see evidence"
     },
     {
       "id": "MIG-DEV-SHADOW",
@@ -469,5 +469,5 @@
       "QUERY_ENGINE findUnique/aggregate/json/distinct"
     ]
   },
-  "harmonization_note": "2026-11-02 CLIENT-003 livré : TX-ASYNC-POOL done (tokio deadpool pool borné + transaction isolation/timeout/retry + erreurs structurées). Reste 4 partial sync-only. Ancienne note 2026-11-01 : TODO annonçait 39/39 done (0 partiel) alors que 5 fiches s'auto-déclarent partielles — aligné 34+5."
+  "harmonization_note": "2026-11-02 CLIENT-003 + CONN-0011 livrés : TX-ASYNC-POOL + CONN-TRAIT-PG18 (Connector trait + Mock + sqlx + TLS + matrice PG16/18 formelle). Reste 3 partial sync-only (CLI/Sécu/Testing). Note 2026-11-01 : TODO annonçait 39/39 done (0 partiel) alors que 5 fiches s'auto-déclarent partielles — aligné 34+5."
 }

@@ -3,6 +3,7 @@
 //! The optional `postgres` feature provides synchronous PostgreSQL execution via libpq.
 #[cfg(feature = "postgres")]
 pub mod postgres;
+pub mod connector;
 pub mod query;
 pub mod relations;
 pub mod row;
