@@ -27,14 +27,9 @@ jobs:
           if [ $code -ne 0 ]; then
             echo "### offline failure log" >> $GITHUB_STEP_SUMMARY
             cat /tmp/offline.log | head -n 500 >> $GITHUB_STEP_SUMMARY || true
-            # push log via git for retrieval (allowed host github.com)
-            git config user.name "ci-bot"
-            git config user.email "ci@ci.local"
-            cat /tmp/offline.log | head -n 500 > /tmp/ci-failure.log
-            cp /tmp/ci-failure.log ci-failure.log
-            git add ci-failure.log
-            git commit -m "ci log $GITHUB_RUN_ID [skip ci]" || true
-            git push origin HEAD:arena/8eafecda-rustorm || true
+            # create issue via api.github.com for retrieval (allowed host)
+            jq -n --arg body "$(cat /tmp/offline.log | head -n 400)" --arg title "CI log $GITHUB_RUN_ID" '{title: $title, body: $body}' > /tmp/issue.json
+            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/json" -d @/tmp/issue.json https://api.github.com/repos/jojo8356/rustorm/issues || true
             exit $code
           fi
         env:
