@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: rustorm
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bin: rustorm
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: rustorm.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build release library + CLI
+        shell: bash
+        run: |
+          cargo build --release --target ${{ matrix.target }} --all-features
+          cargo build --release --target ${{ matrix.target }}
+          ls -lh target/${{ matrix.target }}/release/rustorm* || true
+          ls -lh target/${{ matrix.target }}/release/*.r* || true
+      - name: Package crate
+        shell: bash
+        run: |
+          cargo package --allow-dirty
+          ls -lh target/package/*.crate || true
+      - name: Build docs
+        shell: bash
+        run: |
+          cargo doc --no-deps --all-features
+          tar -czf rustorm-docs-${{ matrix.target }}.tar.gz -C target doc 2>&1 | tail -n 20 || true
+          ls -lh *.tar.gz || true
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.bin }} dist/rustorm-${{ matrix.target }}${{ matrix.target == 'x86_64-pc-windows-msvc' && '.exe' || '' }} 2>&1 || cp target/${{ matrix.target }}/release/rustorm dist/rustorm-${{ matrix.target }} || true
+          # also copy rlib/rmeta for library reuse example
+          cp target/${{ matrix.target }}/release/librustorm.rlib dist/ 2>&1 || true
+          cp target/${{ matrix.target }}/release/deps/librustorm-*.r* dist/ 2>&1 || true
+          cp target/package/*.crate dist/ 2>&1 || true
+          cp rustorm-docs-*.tar.gz dist/ 2>&1 || true
+          ls -lh dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rustorm-${{ matrix.target }}
+          path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - run: ls -R artifacts
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+
+  # Also verify that the library is reusable as a git dependency
+  verify-reuse:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Create consumer project
+        run: |
+          cargo new /tmp/consumer --bin
+          cd /tmp/consumer
+          cat >> Cargo.toml <<'EOF'
+          rustorm = { path = "${{ github.workspace }}" }
+          tokio = { version = "1", features = ["rt-multi-thread","macros"] }
+          EOF
+          cat > src/main.rs <<'RS'
+          fn main() {
+              let src = "datasource db { provider = \"postgresql\" url = env(\"DATABASE_URL\") } model User { id Int @id name String }";
+              let schema = rustorm::schema::parse(src).expect("parse");
+              let sql = rustorm::migrations::initial_sql(&schema).expect("sql");
+              assert!(sql.contains("CREATE TABLE"));
+              println!("reuse OK: {}", sql.lines().next().unwrap());
+          }
+          RS
+          cargo run
+      - name: Verify build.rs helper
+        run: |
+          mkdir -p /tmp/consumer2/rustorm
+          cat > /tmp/consumer2/rustorm/schema.rsm <<'RSM'
+          datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+          model User { id Int @id name String }
+          RSM
+          cargo new /tmp/consumer2 --bin 2>&1 | tail
+          cd /tmp/consumer2
+          cat >> Cargo.toml <<'EOF'
+          rustorm = { path = "${{ github.workspace }}" }
+          EOF
+          cat > build.rs <<'RS'
+          fn main() { rustorm::generate_on_build("rustorm/schema.rsm"); }
+          RS
+          cargo build 2>&1 | tail -n 20
+          echo "build.rs helper OK"

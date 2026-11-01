@@ -2,8 +2,15 @@
 name = "rustorm"
 version = "0.1.0"
 edition = "2021"
-description = "Rust-first schema and typed query foundation"
+description = "Rust-first schema and typed query foundation — .rsm parser, codegen, query builder, migrations & Postgres connector"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/jojo8356/rustorm"
+homepage = "https://github.com/jojo8356/rustorm"
+readme = "README.md"
+keywords = ["orm", "postgres", "prisma", "codegen", "query-builder"]
+categories = ["database", "database-implementations"]
+authors = ["jojo8356"]
+exclude = [".github/", "docs/", "benches/", "tests/"]
 
 [dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "rt"] }
@@ -16,6 +23,7 @@ postgres = []
 sqlx = ["postgres", "dep:sqlx", "tokio/time"]
 
 [lib]
+name = "rustorm"
 path = "src/lib.rs"
 
 [[bin]]
@@ -24,3 +32,14 @@ path = "src/main.rs"
 
 [[bench]]
 name = "baseline"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
