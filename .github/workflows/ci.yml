@@ -27,10 +27,13 @@ jobs:
           cargo test --locked --offline --features postgres -- --nocapture > /tmp/pg.log 2>&1
           s=$?
           cat /tmp/pg.log
+          echo "EXIT:$s"
           if [ $s -ne 0 ]; then
-            echo "---- PG TEST FAIL TAIL 200 ----"
-            tail -n 200 /tmp/pg.log > /tmp/tail.log
-            cat /tmp/tail.log
-            while IFS= read -r line; do safe=$(echo "$line" | sed 's/%/%25/g' | tr -d '\r' | cut -c1-300); echo "::error::$safe"; done < /tmp/tail.log
+            echo "----PG FAIL GREP----"
+            grep -E "FAILED|failures:|test result|error\[E" /tmp/pg.log | head -n 100 > /tmp/grep.log
+            cat /tmp/grep.log
+            while IFS= read -r line; do safe=$(echo "$line" | sed 's/%/%25/g' | tr -d '\r' | cut -c1-500); echo "::error::$safe"; done < /tmp/grep.log
+            tail -n 50 /tmp/pg.log > /tmp/tail.log
+            while IFS= read -r line; do safe=$(echo "$line" | sed 's/%/%25/g' | tr -d '\r' | cut -c1-500); echo "::error::TAIL:$safe"; done < /tmp/tail.log
             exit $s
           fi
