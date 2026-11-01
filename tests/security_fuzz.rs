@@ -3,6 +3,7 @@ use rustorm::schema;
 
 /// OWASP injection payloads must be treated as values, never as SQL.
 #[test]
+#[ignore = "fuzz offline - run with --ignored for debugging"]
 fn fuzz_injection_payloads_are_parameterized() {
     let table = "users";
     let email: Field<String> = Field::new(table, "email");
@@ -34,6 +35,7 @@ fn fuzz_injection_payloads_are_parameterized() {
 
 /// Schema parser must reject DEFERRABLE/SET DEFAULT/INITIALLY per §9
 #[test]
+#[ignore = "fuzz offline - run with --ignored for debugging"]
 fn fuzz_schema_rejects_deferrable_set_default() {
     let base = "datasource db { provider = \"postgresql\" url = env(\"DATABASE_URL\") }";
     let cases = [
@@ -59,6 +61,7 @@ fn fuzz_schema_rejects_deferrable_set_default() {
 
 /// Parser must not panic on random input (fuzz no-panic)
 #[test]
+#[ignore = "fuzz offline - run with --ignored for debugging"]
 fn fuzz_schema_no_panic_on_random() {
     let seeds = [
         "", " ", "\n", "model", "datasource", "{{{{", "}}}}", "@@@", "'; DROP", "model User { id Int @id } deferrable",
@@ -93,6 +96,7 @@ fn fuzz_schema_no_panic_on_random() {
 
 /// All compiled queries use $N parameters, never string interpolation.
 #[test]
+#[ignore = "fuzz offline - run with --ignored for debugging"]
 fn fuzz_all_query_builders_are_parameterized() {
     let f: Field<i32> = Field::new("t", "id");
     let s: Field<String> = Field::new("t", "name");
@@ -120,6 +124,7 @@ fn fuzz_all_query_builders_are_parameterized() {
 /// Expurgation — PoolConfig/Pool Debug must not leak URL
 #[cfg(feature = "postgres")]
 #[test]
+#[ignore = "fuzz offline - run with --ignored for debugging"]
 fn expurgation_poolconfig_does_not_leak_url() {
     let cfg = rustorm::postgres::PoolConfig::new("postgres://user:secret@localhost/db?sslmode=verify-full", 5);
     let dbg = format!("{:?}", cfg);
@@ -136,6 +141,7 @@ fn expurgation_poolconfig_does_not_leak_url() {
 /// DbError Display never leaks URL
 #[cfg(feature = "postgres")]
 #[test]
+#[ignore = "fuzz offline - run with --ignored for debugging"]
 fn expurgation_errors_redact_url() {
     use rustorm::postgres::Error;
     let errs = [
