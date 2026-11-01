@@ -296,7 +296,7 @@ impl AsyncPool {
     }
     pub fn with_config(cfg: PoolConfig) -> Self {
         let manager = PgManager { url: cfg.url.clone() };
-        let inner = deadpool::managed::Pool::builder(manager).max_size(cfg.max_connections).create_timeout(Some(cfg.connection_timeout)).recycle_timeout(Some(cfg.connection_timeout)).wait_timeout(Some(cfg.connection_timeout)).runtime(deadpool::Runtime::Tokio1).build().expect("pool build");
+        let inner = deadpool::managed::Pool::builder(manager).max_size(cfg.max_connections).create_timeout(Some(cfg.connection_timeout)).recycle_timeout(Some(cfg.connection_timeout)).wait_timeout(Some(cfg.connection_timeout)).build().expect("pool build");
         Self { config: cfg, inner }
     }
     pub fn max_connections(&self) -> usize { self.config.max_connections }
@@ -885,38 +885,37 @@ impl Connection {
     where F: FnOnce(&mut Transaction<'_>) -> Result<T, Error> {
         self.transaction_with_options(TransactionOptions::default(), f)
     }
-    pub fn transaction_with_options<F, T>(&mut self, opts: TransactionOptions, f: F) -> Result<T, Error>
-    where F: FnOnce(&mut Transaction<'_>) -> Result<T, Error> {
+    pub fn transaction_with_options<F, T>(&mut self, opts: TransactionOptions, mut f: F) -> Result<T, Error>
+    where F: FnMut(&mut Transaction<'_>) -> Result<T, Error> {
         let max = opts.max_retries;
-        let mut attempts = 0;
+        let mut attempts = 0u32;
         loop {
-            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let mut tx = match self.begin_with_options(opts.clone()) {
-                    Ok(t) => t,
-                    Err(e) => return Err(e),
-                };
-                let res = f(&mut tx);
-                match res {
-                    Ok(v) => match tx.commit() {
-                        Ok(()) => Ok(v),
-                        Err(e) => Err(e),
-                    },
+            let mut tx = self.begin_with_options(opts.clone())?;
+            // catch_unwind needs to capture &mut f
+            let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&mut tx)));
+            match res {
+                Ok(Ok(v)) => match tx.commit() {
+                    Ok(()) => return Ok(v),
                     Err(e) => {
-                        let _ = tx.rollback();
-                        Err(e)
+                        if e.is_retryable() && opts.retry_on_deadlock && attempts < max {
+                            attempts += 1;
+                            std::thread::sleep(Duration::from_millis(20 * attempts as u64));
+                            continue;
+                        }
+                        return Err(e);
                     }
+                },
+                Ok(Err(e)) => {
+                    let _ = tx.rollback();
+                    if e.is_retryable() && opts.retry_on_deadlock && attempts < max {
+                        attempts += 1;
+                        std::thread::sleep(Duration::from_millis(20 * attempts as u64));
+                        continue;
+                    }
+                    return Err(e);
                 }
-            }));
-            match outcome {
-                Ok(Ok(v)) => return Ok(v),
-                Ok(Err(e)) if e.is_retryable() && opts.retry_on_deadlock && attempts < max => {
-                    attempts += 1;
-                    std::thread::sleep(Duration::from_millis(20 * attempts as u64));
-                    continue;
-                }
-                Ok(Err(e)) => return Err(e),
                 Err(payload) => {
-                    // panic → rollback already via Drop, resume panic
+                    let _ = tx.rollback();
                     std::panic::resume_unwind(payload);
                 }
             }
