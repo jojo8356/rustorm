@@ -17,11 +17,11 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libpq-dev
       - name: Test without optional connector
         run: |
-          cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/offline.log
-          status=${PIPESTATUS[0]}
-          if [ $status -ne 0 ]; then
-            echo "---- OFFLINE FAIL TAIL ----"
-            tail -n 300 /tmp/offline.log
-            echo "::error::$(grep -A2 -E 'FAILED|error\[E' /tmp/offline.log | head -n 100 | tr '\n' ' ' | cut -c1-2000)"
-            exit $status
+          set -o pipefail
+          cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/offline.log; s=${PIPESTATUS[0]}
+          cat /tmp/offline.log
+          if [ $s -ne 0 ]; then
+            echo "----FAIL----"
+            grep -E "error|FAILED" /tmp/offline.log | head -n 80 || true
+            exit $s
           fi
