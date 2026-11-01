@@ -12,13 +12,31 @@ jobs:
           cargo update || true
           cargo fetch || true
       - name: Test without optional connector (offline, multi-OS)
-        run: cargo test --locked --offline -- --nocapture
+        run: cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/offline.log; test ${PIPESTATUS[0]} -eq 0
+      - name: Dump log on failure
+        if: failure()
+        run: |
+          echo "=== offline.log tail ==="
+          tail -n 400 /tmp/offline.log || true
+          echo "=== cargo check ==="
+          cargo check --offline 2>&1 | head -n 100 || true
       - name: Check performance baseline budgets (offline)
         run: cargo test --locked --offline --test performance_baseline -- --nocapture
       - name: Check AC matrix + Prisma diff + multi-OS (offline)
         run: cargo test --locked --offline --test test_matrix_ac_jalons --test prisma_diff --test multi_os_verification -- --nocapture
       - name: Run baseline benches (offline)
         run: cargo test --locked --offline --bench baseline -- --nocapture || cargo test --locked --offline --benches -- --nocapture
+      - name: Report failure via issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let log = '';
+            try { log = fs.readFileSync('/tmp/offline.log', 'utf8').slice(-60000); } catch(e) { log = 'no log: '+e; }
+            const title = `ci offline failed ${context.sha.slice(0,7)}`;
+            const body = '```\n' + log.slice(-50000) + '\n```';
+            await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body});
   test:
     runs-on: ubuntu-latest
     strategy: {fail-fast: false, matrix: {postgres: [16,18]}}
@@ -38,7 +56,10 @@ jobs:
           cargo update || true
           cargo fetch || true
       - name: Test without optional connector
-        run: cargo test --locked --offline -- --nocapture
+        run: cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/offline_pg.log; test ${PIPESTATUS[0]} -eq 0
+      - name: Dump PG log on failure
+        if: failure()
+        run: tail -n 400 /tmp/offline_pg.log || true
       - name: Test with connector enabled
         run: cargo test --locked --offline --features postgres -- --nocapture
       - name: Test with sqlx connector enabled
@@ -71,3 +92,14 @@ jobs:
         run: cargo test --locked --offline --features postgres --test performance_postgres -- --ignored -- --nocapture
       - name: Run PG Prisma differential (PG16/18)
         run: cargo test --locked --offline --features postgres --test prisma_diff_postgres -- --ignored -- --nocapture
+      - name: Report PG failure via issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let log = '';
+            try { log = fs.readFileSync('/tmp/offline_pg.log', 'utf8').slice(-60000); } catch(e) { log = 'no log: '+e; }
+            const title = `ci PG failed ${context.sha.slice(0,7)}`;
+            const body = '```\n' + log.slice(-50000) + '\n```';
+            await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body});
