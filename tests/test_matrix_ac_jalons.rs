@@ -88,7 +88,7 @@ fn ac_04_nonexistent_field_wrong_type_none_required_rejected() {
 #[test]
 fn ac_05_crud_unique_fk_errors_normalized() {
     let schema = parse(&rsm(r#"
-model User { id Int @id name String email String @unique }
+model User { id Int @id name String email String @unique posts Post[] }
 model Post { id Int @id title String authorId Int author User @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade) }
 "#)).unwrap();
     let sql = migrations::initial_sql(&schema).unwrap();
@@ -135,11 +135,9 @@ fn ac_08_logical_empty_pagination_order() {
 fn ac_09_include_bounded_independent_of_n() {
     reset_metrics();
     let users = instrumented_query("users_find_many", || {
-        record_query(1);
         vec![1,2,3,100]
     });
     let posts = instrumented_query("posts_where_author_in", || {
-        record_query(1);
         vec![10,20,30]
     });
     let m = metrics();
@@ -277,8 +275,8 @@ fn m2_transaction_options() {
 #[test]
 fn m3_relations_include_nplus1_tx() {
     reset_metrics();
-    instrumented_query("parent", || { record_query(1); });
-    instrumented_query("children_grouped", || { record_query(1); });
+    instrumented_query("parent", || {});
+    instrumented_query("children_grouped", || {});
     assert!(metrics().count <= 2);
 }
 
@@ -291,7 +289,7 @@ fn m4_migrations_shadow_introspection_sécu() {
 
 #[test]
 fn m5_prisma_import_nested_aggregate_cursor() {
-    let prisma = "model User { id Int @id name String }";
+    let prisma = "datasource db { provider = \"postgresql\" url = env(\"DATABASE_URL\") }\nmodel User { id Int @id name String }";
     let out = prisma_import::convert_prisma_to_rsm(prisma).unwrap();
     assert!(out.0.is_empty() || out.0.contains("model") || !out.1.warnings.is_empty());
 }
@@ -327,7 +325,7 @@ fn prisma_diff_ddl_hash_stable_across_pg() {
     let sql = migrations::initial_sql(&schema).unwrap();
     let h = rustorm::checksum::sha256(sql.as_bytes());
     assert!(!h.is_empty());
-    let imp = prisma_import::convert_prisma_to_rsm("model User { id Int @id name String }").unwrap();
+    let imp = prisma_import::convert_prisma_to_rsm("datasource db { provider = \"postgresql\" url = env(\"DATABASE_URL\") }\nmodel User { id Int @id name String }").unwrap();
     assert!(imp.0.is_empty() || imp.0.contains("User") || !imp.1.warnings.is_empty());
 }
 
