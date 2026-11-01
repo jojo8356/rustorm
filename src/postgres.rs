@@ -963,6 +963,11 @@ pub struct Transaction<'a> {
     connection: &'a mut Connection,
     active: bool,
 }
+impl fmt::Debug for Transaction<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Transaction").field("active", &self.active).finish()
+    }
+}
 impl Transaction<'_> {
     /// Execute nested creation using a savepoint; success does not commit this transaction.
     pub fn nested_create<P, C, K>(
