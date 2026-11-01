@@ -15,17 +15,27 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y libpq-dev
-      - name: Update Cargo.lock for new deps (once)
-        run: |
-          cargo update 2>&1 | tail -n 20
-          if ! git diff --quiet Cargo.lock; then
-            git config user.name "rustorm-ci"
-            git config user.email "ci@rustorm.local"
-            git add Cargo.lock
-            git commit -m "chore: update Cargo.lock for tokio/deadpool"
-            git push origin HEAD:arena/8eafecda-rustorm
-          else
-            echo "Cargo.lock up to date"
-          fi
+      - name: Update Cargo.lock for new deps (if needed)
+        run: cargo update || true
       - name: Test without optional connector
         run: cargo test --locked --offline -- --nocapture
+      - name: Test with connector enabled
+        run: cargo test --locked --offline --features postgres -- --nocapture
+      - name: Run real PostgreSQL integration tests
+        run: cargo test --locked --offline --features postgres --test postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL migration integration tests
+        run: cargo test --locked --offline --features postgres --test migrations_postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL relation integration tests
+        run: cargo test --locked --offline --features postgres --test relations_postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL cardinality integration tests
+        run: cargo test --locked --offline --features postgres --test cardinalities_postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL composite primary key tests
+        run: cargo test --locked --offline --features postgres --test composite_postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL named relation tests
+        run: cargo test --locked --offline --features postgres --test named_postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL nested-write integration tests
+        run: cargo test --locked --offline --features postgres --test nested_create_postgres -- --ignored -- --nocapture
+      - name: Run PostgreSQL nested disconnect tests
+        run: cargo test --locked --offline --features postgres --test nested_disconnect_postgres -- --ignored -- --nocapture
+      - name: Run shadow database planning tests
+        run: cargo test --locked --offline --features postgres --test shadow_postgres -- --ignored -- --nocapture
