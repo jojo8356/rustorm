@@ -350,7 +350,7 @@ fn ci_generate_check_sans_pg() {
 
 #[test]
 fn fuzz_corpus_no_panic_terminates() {
-    let corpus = ["", "model", "model {", "model User { x Unknown", "/// comment\nmodel User { id Int @id }", "a".repeat(10000)];
+    let corpus: Vec<String> = vec!["".to_string(), "model".to_string(), "model {".to_string(), "model User { x Unknown".to_string(), "/// comment\nmodel User { id Int @id }".to_string(), "a".repeat(10000)];
     for input in &corpus {
         let rsm_input = if input.starts_with("model") || input.is_empty() || input.starts_with("///") { std::format!("{}{}", header(), input) } else { input.clone() };
         let res = parse(&rsm_input);
