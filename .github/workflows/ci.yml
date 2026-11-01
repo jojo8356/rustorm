@@ -15,34 +15,48 @@ jobs:
           cargo fetch || true
       - name: Cargo check offline
         shell: bash
-        run: cargo check --offline 2>&1 | tail -n 200
+        run: cargo check --offline 2>&1 | tail -n 50
       - name: Test without optional connector (offline, multi-OS)
+        id: cargo_test
         shell: bash
-        run: cargo test --locked --offline -- --nocapture
-      - name: Report offline failure diagnostics
+        continue-on-error: true
+        run: cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/cargo_test.log; test ${PIPESTATUS[0]} -eq 0
+      - name: Show cargo test log tail
+        if: always()
+        shell: bash
+        run: |
+          echo "=== cargo test log tail ==="
+          cat /tmp/cargo_test.log 2>/dev/null | tail -n 200 || true
+          echo "=== cargo test grep FAILED ==="
+          cat /tmp/cargo_test.log 2>/dev/null | grep -E "FAILED|failed|error\[E|test result" | tail -n 100 || true
+      - name: Check performance baseline budgets (offline)
+        if: always()
+        shell: bash
+        run: cargo test --locked --offline --test performance_baseline -- --nocapture 2>&1 | tail -n 100
+      - name: Check AC matrix + Prisma diff + multi-OS (offline)
+        if: always()
+        shell: bash
+        run: cargo test --locked --offline --test test_matrix_ac_jalons --test prisma_diff --test multi_os_verification -- --nocapture 2>&1 | tail -n 100
+      - name: Run baseline benches (offline)
+        if: always()
+        shell: bash
+        run: cargo test --locked --offline --bench baseline -- --nocapture 2>&1 | tail -n 50 || cargo test --locked --offline --benches -- --nocapture 2>&1 | tail -n 50
+      - name: Fail if cargo test had failed
+        if: always()
+        shell: bash
+        run: test "${{ steps.cargo_test.outcome }}" == "success"
+      - name: Report offline diagnostics via issue
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
-            const fs=require('fs');
             const {execSync}=require('child_process');
-            let body='=== diag '+process.env.GITHUB_SHA.slice(0,7)+' ===\n';
-            try{ body+='\n--- cargo check --offline --\n'+execSync('cargo check --offline 2>&1 | tail -n 100',{encoding:'utf8',timeout:60000}); }catch(e){ body+='\ncheck failed: '+(e.stdout||e.message).slice(-4000); }
-            try{ body+='\n--- cargo test --lib --\n'+execSync('cargo test --locked --offline --lib -- --nocapture 2>&1 | tail -n 100',{encoding:'utf8',timeout:60000}); }catch(e){ body+='\nlib failed: '+(e.stdout||e.message).slice(-4000); }
-            try{ body+='\n--- cargo test test_matrix_ac_jalons --\n'+execSync('cargo test --locked --offline --test test_matrix_ac_jalons -- --nocapture 2>&1 | tail -n 400',{encoding:'utf8',timeout:60000}); }catch(e){ body+='\nmatrix failed: '+(e.stdout||e.message||'').slice(-4000); }
-            try{ body+='\n--- cargo test prisma_diff --\n'+execSync('cargo test --locked --offline --test prisma_diff -- --nocapture 2>&1 | tail -n 300',{encoding:'utf8',timeout:60000}); }catch(e){ body+='\nprisma failed: '+(e.stdout||e.message||'').slice(-4000); }
-            try{ body+='\n--- cargo test multi_os --\n'+execSync('cargo test --locked --offline --test multi_os_verification -- --nocapture 2>&1 | tail -n 300',{encoding:'utf8',timeout:60000}); }catch(e){ body+='\nmulti_os failed: '+(e.stdout||e.message||'').slice(-4000); }
+            let body='diag '+process.env.GITHUB_SHA.slice(0,7)+' '+process.env.RUNNER_OS+'\n';
+            try{ body+='\n--- cargo_test.log tail --\n'+execSync('cat /tmp/cargo_test.log 2>/dev/null | tail -n 300',{encoding:'utf8'}); }catch(e){}
+            try{ body+='\n--- grep FAILED --\n'+execSync('cat /tmp/cargo_test.log 2>/dev/null | grep -E \"FAILED|test result\" | tail -n 100',{encoding:'utf8'}); }catch(e){}
+            try{ body+='\n--- test_matrix_ac_jalons alone --\n'+execSync('cargo test --locked --offline --test test_matrix_ac_jalons -- --nocapture 2>&1 | tail -n 300',{encoding:'utf8',timeout:60000}); }catch(e){ body+='\nmatrix alone failed: '+(e.stdout||e.message||'').slice(-4000); }
             body=body.slice(-60000);
-            await github.rest.issues.create({owner:context.repo.owner,repo:context.repo.repo,title:`ci diag ${process.env.GITHUB_SHA.slice(0,7)} ${process.env.RUNNER_OS||''}`,body});
-      - name: Check performance baseline budgets (offline)
-        shell: bash
-        run: cargo test --locked --offline --test performance_baseline -- --nocapture
-      - name: Check AC matrix + Prisma diff + multi-OS (offline)
-        shell: bash
-        run: cargo test --locked --offline --test test_matrix_ac_jalons --test prisma_diff --test multi_os_verification -- --nocapture
-      - name: Run baseline benches (offline)
-        shell: bash
-        run: cargo test --locked --offline --bench baseline -- --nocapture || cargo test --locked --offline --benches -- --nocapture
+            await github.rest.issues.create({owner:context.repo.owner,repo:context.repo.repo,title:`ci diag ${process.env.GITHUB_SHA.slice(0,7)} ${process.env.RUNNER_OS}`,body});
   test:
     runs-on: ubuntu-latest
     strategy: {fail-fast: false, matrix: {postgres: [16,18]}}
@@ -64,7 +78,17 @@ jobs:
           cargo fetch || true
       - name: Test without optional connector
         shell: bash
-        run: cargo test --locked --offline -- --nocapture
+        run: cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/cargo_test.log; test ${PIPESTATUS[0]} -eq 0
+      - name: Fail diagnostics
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {execSync}=require('child_process');
+            let body='diag PG '+process.env.GITHUB_SHA.slice(0,7)+'\n';
+            try{ body+=execSync('cat /tmp/cargo_test.log 2>/dev/null | tail -n 300',{encoding:'utf8'}); }catch(e){}
+            body=body.slice(-60000);
+            await github.rest.issues.create({owner:context.repo.owner,repo:context.repo.repo,title:`ci PG diag ${process.env.GITHUB_SHA.slice(0,7)}`,body});
       - name: Test with connector enabled
         shell: bash
         run: cargo test --locked --offline --features postgres -- --nocapture
