@@ -22,7 +22,16 @@ jobs:
       - name: Test without optional connector
         run: cargo test --locked --offline -- --nocapture
       - name: Test with connector enabled
-        run: cargo test --locked --offline --features postgres -- --nocapture
+        run: |
+          set -o pipefail
+          cargo test --locked --offline --features postgres -- --nocapture 2>&1 | tee /tmp/pg_feat.log
+          code=${PIPESTATUS[0]}
+          if [ $code -ne 0 ]; then
+            echo "::error ::PG_FEAT_FAILED"
+            tail -n 120 /tmp/pg_feat.log | while IFS= read -r line; do echo "::error ::$line"; done
+            grep -E "FAILED|error\[E" /tmp/pg_feat.log | head -n 40 | while IFS= read -r line; do echo "::error ::$line"; done
+          fi
+          exit $code
       - name: Run real PostgreSQL integration tests
         run: cargo test --locked --offline --features postgres --test postgres -- --ignored -- --nocapture
       - name: Run PostgreSQL migration integration tests
