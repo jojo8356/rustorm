@@ -13,6 +13,9 @@ jobs:
         run: |
           cargo update || true
           cargo fetch || true
+      - name: Cargo check offline
+        shell: bash
+        run: cargo check --offline 2>&1 | tail -n 200
       - name: Test without optional connector (offline, multi-OS)
         shell: bash
         run: cargo test --locked --offline -- --nocapture
@@ -22,18 +25,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "=== cargo test --offline -- --list ==="
-          cargo test --locked --offline -- --list 2>&1 | tail -n 200 || true
-          echo "=== cargo test performance_baseline ==="
-          cargo test --locked --offline --test performance_baseline -- --nocapture 2>&1 | tail -n 200 || true
-          echo "=== cargo test test_matrix_ac_jalons ==="
-          cargo test --locked --offline --test test_matrix_ac_jalons -- --nocapture 2>&1 | tail -n 200 || true
-          echo "=== cargo test prisma_diff ==="
-          cargo test --locked --offline --test prisma_diff -- --nocapture 2>&1 | tail -n 200 || true
-          echo "=== cargo check ==="
-          cargo check --offline 2>&1 | tail -n 100 || true
-          # Create issue with diagnostics
-          cargo test --locked --offline -- --nocapture 2>&1 | tail -n 500 > /tmp/diag.log || true
+          echo "=== cargo check ===" > /tmp/diag.log
+          cargo check --offline 2>&1 | tail -n 100 >> /tmp/diag.log || true
+          echo "=== cargo test --lib ===" >> /tmp/diag.log
+          cargo test --locked --offline --lib -- --nocapture 2>&1 | tail -n 200 >> /tmp/diag.log || true
+          echo "=== cargo test --test performance_baseline ===" >> /tmp/diag.log
+          cargo test --locked --offline --test performance_baseline -- --nocapture 2>&1 | tail -n 200 >> /tmp/diag.log || true
+          echo "=== cargo test --test test_matrix_ac_jalons ===" >> /tmp/diag.log
+          cargo test --locked --offline --test test_matrix_ac_jalons -- --nocapture 2>&1 | tail -n 300 >> /tmp/diag.log || true
+          echo "=== cargo test --test prisma_diff ===" >> /tmp/diag.log
+          cargo test --locked --offline --test prisma_diff -- --nocapture 2>&1 | tail -n 300 >> /tmp/diag.log || true
+          echo "=== cargo test --test multi_os_verification ===" >> /tmp/diag.log
+          cargo test --locked --offline --test multi_os_verification -- --nocapture 2>&1 | tail -n 300 >> /tmp/diag.log || true
+          cat /tmp/diag.log
           gh issue create --title "ci offline diag ${GITHUB_SHA:0:7} ${{ matrix.os }}" --body-file /tmp/diag.log || true
       - name: Check performance baseline budgets (offline)
         shell: bash
