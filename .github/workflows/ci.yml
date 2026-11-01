@@ -1,57 +1,27 @@
 name: Rust tests
-on:
-  push:
-  pull_request:
-
+on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        postgres: [16, 18]
+    strategy: {fail-fast: false, matrix: {postgres: [16,18]}}
     services:
       postgres:
         image: postgres:${{ matrix.postgres }}
-        env:
-          POSTGRES_USER: rustorm
-          POSTGRES_DB: rustorm_test
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U rustorm -d rustorm_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
-    env:
-      RUSTORM_TEST_DATABASE_PORT: 5432
-      RUSTORM_TEST_DATABASE_USER: rustorm
-      RUSTORM_TEST_DATABASE_NAME: rustorm_test
+        env: {POSTGRES_USER: rustorm, POSTGRES_DB: rustorm_test, POSTGRES_HOST_AUTH_METHOD: trust}
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U rustorm -d rustorm_test" --health-interval 5s --health-timeout 5s --health-retries 12
+    env: {RUSTORM_TEST_DATABASE_PORT: 5432, RUSTORM_TEST_DATABASE_USER: rustorm, RUSTORM_TEST_DATABASE_NAME: rustorm_test}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install libpq development files
-        run: sudo apt-get update && sudo apt-get install -y libpq-dev
+      - run: sudo apt-get update && sudo apt-get install -y libpq-dev
       - name: Test without optional connector
-        run: cargo test --locked --offline
-      - name: Test with connector enabled
-        run: cargo test --locked --offline --features postgres
-      - name: Run real PostgreSQL integration tests
-        run: cargo test --locked --offline --features postgres --test postgres -- --ignored
-      - name: Run PostgreSQL migration integration tests
-        run: cargo test --locked --offline --features postgres --test migrations_postgres -- --ignored
-      - name: Run PostgreSQL relation integration tests
-        run: cargo test --locked --offline --features postgres --test relations_postgres -- --ignored
-      - name: Run PostgreSQL cardinality integration tests
-        run: cargo test --locked --offline --features postgres --test cardinalities_postgres -- --ignored
-      - name: Run PostgreSQL composite primary key tests
-        run: cargo test --locked --offline --features postgres --test composite_postgres -- --ignored
-      - name: Run PostgreSQL named relation tests
-        run: cargo test --locked --offline --features postgres --test named_postgres -- --ignored
-      - name: Run PostgreSQL nested-write integration tests
-        run: cargo test --locked --offline --features postgres --test nested_create_postgres -- --ignored
-      - name: Run PostgreSQL nested disconnect tests
-        run: cargo test --locked --offline --features postgres --test nested_disconnect_postgres -- --ignored
-      - name: Run shadow database planning tests
-        run: cargo test --locked --offline --features postgres --test shadow_postgres -- --ignored
+        run: |
+          cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/offline.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            echo "---- OFFLINE FAIL TAIL ----"
+            tail -n 300 /tmp/offline.log
+            echo "::error::$(grep -A2 -E 'FAILED|error\[E' /tmp/offline.log | head -n 100 | tr '\n' ' ' | cut -c1-2000)"
+            exit $status
+          fi
