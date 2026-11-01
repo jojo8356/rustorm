@@ -27,8 +27,8 @@ jobs:
           if [ $code -ne 0 ]; then
             echo "### offline failure log" >> $GITHUB_STEP_SUMMARY
             cat /tmp/offline.log >> $GITHUB_STEP_SUMMARY || true
-            # also post to issue for retrieval via api.github.com (allowed host)
-            gh issue create --title "CI offline $GITHUB_RUN_ID" --body "$(cat /tmp/offline.log | head -c 50000)" || true
+            # post log as comment to existing issue #1 for retrieval via api.github.com
+            gh api repos/jojo8356/rustorm/issues/1/comments --method POST --field body="$(cat /tmp/offline.log | head -c 50000)" || true
             exit $code
           fi
         env:
