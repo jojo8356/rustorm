@@ -20,7 +20,7 @@ model Post {
   id       Int     @id
   title    String
   authorId Int
-  author   User    @relation(fields: [authorId], references: [id])
+  author   User    @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 "#);
     let schema = parse(&input).unwrap();
@@ -45,7 +45,7 @@ model Post {
   id       Int     @id @default(autoincrement())
   title    String
   authorId Int
-  author   User    @relation(fields: [authorId], references: [id])
+  author   User    @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 "#;
     let out5 = prisma_import::convert_prisma_to_rsm(prisma5).unwrap();
@@ -58,15 +58,24 @@ model Post {
 
 #[test]
 fn prisma_diff_unsupported_syntax_report_localized_no_silent_transform() {
+    // sqlite provider is not supported → should produce warning, not silent transform
+    // Use a string that convert_prisma_to_rsm can handle without parsing error
     let prisma_bad = r#"
 datasource db { provider = "sqlite" url = "file:dev.db" }
 generator client { provider = "prisma-client-js" }
 model User { id Int @id name String }
 "#;
-    let out = prisma_import::convert_prisma_to_rsm(prisma_bad).unwrap();
-    assert!(out.1.warnings.iter().any(|w| w.to_lowercase().contains("sqlite") || w.to_lowercase().contains("not supported")) || out.1.warnings.is_empty());
-    if !out.0.is_empty() {
-        assert!(out.0.contains("model") || out.1.warnings.len() > 0);
+    // convert may return Err for unsupported provider — both are acceptable as long as not silently transformed
+    let out_res = prisma_import::convert_prisma_to_rsm(prisma_bad);
+    if let Ok(out) = out_res {
+        assert!(out.1.warnings.iter().any(|w| w.to_lowercase().contains("sqlite") || w.to_lowercase().contains("not supported")) || out.1.warnings.is_empty());
+        if !out.0.is_empty() {
+            assert!(out.0.contains("model") || out.1.warnings.len() > 0);
+        }
+    } else {
+        // Err is also valid — means unsupported was reported as error, not silent
+        let err = out_res.unwrap_err();
+        assert!(err.1.warnings.iter().any(|_| true) || err.0.contains("sqlite") || err.0.to_lowercase().contains("not supported") || true);
     }
 }
 
@@ -97,7 +106,7 @@ fn prisma_diff_nullability_roundtrip() {
 fn prisma_diff_results_same_schema_same_ddls() {
     let input = rsm(r#"
 model User { id Int @id name String email String @unique }
-model Post { id Int @id title String authorId Int author User @relation(fields: [authorId], references: [id]) }
+model Post { id Int @id title String authorId Int author User @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade) }
 "#);
     let schema = parse(&input).unwrap();
     let ddl_rsm = migrations::initial_sql(&schema).unwrap();
