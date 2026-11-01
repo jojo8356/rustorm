@@ -32,7 +32,7 @@ model Post {
   id       Int     @id
   title    String
   authorId Int
-  author   User    @relation(fields: [authorId], references: [id])
+  author   User    @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 enum Role { USER ADMIN }
 "#);
@@ -57,7 +57,7 @@ fn ac_02_unknown_type_attr_fk_collision_rejected() {
     assert!(!err.message.is_empty());
     let err = parse(&rsm(r#"
 model User { id Int @id }
-model Post { id Int @id authorId Int author User @relation(fields: [authorId], references: [nonexistent]) }
+model Post { id Int @id authorId Int author User @relation(fields: [authorId], references: [nonexistent], onDelete: Cascade, onUpdate: Cascade) }
 "#)).expect_err("FK incompatible must fail");
     assert!(!err.message.is_empty());
     let src = rsm("model User { id Int @id type String }");
@@ -70,7 +70,7 @@ model Post { id Int @id authorId Int author User @relation(fields: [authorId], r
 fn ac_03_client_generated_examples_build() {
     let schema = parse(&rsm(r#"
 model User { id Int @id name String email String @unique posts Post[] }
-model Post { id Int @id title String authorId Int author User @relation(fields: [authorId], references: [id]) }
+model Post { id Int @id title String authorId Int author User @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade) }
 "#)).unwrap();
     let gen = generate(&schema);
     assert!(gen.contains("User") || gen.contains("ModelDelegate"), "AC-03 must generate delegates");
@@ -89,7 +89,7 @@ fn ac_04_nonexistent_field_wrong_type_none_required_rejected() {
 fn ac_05_crud_unique_fk_errors_normalized() {
     let schema = parse(&rsm(r#"
 model User { id Int @id name String email String @unique }
-model Post { id Int @id title String authorId Int author User @relation(fields: [authorId], references: [id]) }
+model Post { id Int @id title String authorId Int author User @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade) }
 "#)).unwrap();
     let sql = migrations::initial_sql(&schema).unwrap();
     assert!(sql.contains("CREATE TABLE"));
@@ -365,8 +365,8 @@ fn fuzz_corpus_no_panic_terminates() {
 #[test]
 fn property_relations_filters() {
     let schemas = [
-        rsm("model User { id Int @id posts Post[] } model Post { id Int @id authorId Int author User @relation(fields: [authorId], references: [id]) }"),
-        rsm("model A { id Int @id b B? } model B { id Int @id aId Int @unique a A @relation(fields: [aId], references: [id]) }"),
+        rsm("model User { id Int @id posts Post[] } model Post { id Int @id authorId Int author User @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade) }"),
+        rsm("model A { id Int @id b B? } model B { id Int @id aId Int @unique a A @relation(fields: [aId], references: [id], onDelete: Cascade, onUpdate: Cascade) }"),
     ];
     for src in schemas {
         let s = parse(&src).expect("property schema must parse");
