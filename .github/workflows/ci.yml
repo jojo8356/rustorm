@@ -32,21 +32,42 @@ jobs:
           echo "=== grep FAILED ==="
           grep -E "FAILED|test result|failures:" "$RUNNER_TEMP/cargo_test.log" 2>&1 | tail -n 100 || true
       - name: Check performance baseline budgets (offline)
+        id: perf
         if: always()
         shell: bash
-        run: cargo test --locked --offline --test performance_baseline -- --nocapture 2>&1 | tail -n 100
+        continue-on-error: true
+        run: |
+          cargo test --locked --offline --test performance_baseline -- --nocapture 2>&1 | tee "$RUNNER_TEMP/perf.log"
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Show perf log
+        if: always()
+        shell: bash
+        run: cat "$RUNNER_TEMP/perf.log" 2>&1 | tail -n 300 || true
       - name: Check AC matrix + Prisma diff + multi-OS (offline)
+        id: matrix
         if: always()
         shell: bash
-        run: cargo test --locked --offline --test test_matrix_ac_jalons --test prisma_diff --test multi_os_verification -- --nocapture 2>&1 | tail -n 100
+        continue-on-error: true
+        run: |
+          cargo test --locked --offline --test test_matrix_ac_jalons --test prisma_diff --test multi_os_verification -- --nocapture 2>&1 | tee "$RUNNER_TEMP/matrix.log"
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Show matrix log
+        if: always()
+        shell: bash
+        run: cat "$RUNNER_TEMP/matrix.log" 2>&1 | tail -n 400 || true
       - name: Run baseline benches (offline)
+        id: benches
         if: always()
         shell: bash
-        run: cargo test --locked --offline --bench baseline -- --nocapture 2>&1 | tail -n 50 || cargo test --locked --offline --benches -- --nocapture 2>&1 | tail -n 50
-      - name: Fail if cargo test had failed
+        continue-on-error: true
+        run: |
+          cargo test --locked --offline --bench baseline -- --nocapture 2>&1 | tee "$RUNNER_TEMP/benches.log"
+          test ${PIPESTATUS[0]} -eq 0 || (cargo test --locked --offline --benches -- --nocapture 2>&1 | tee "$RUNNER_TEMP/benches.log"; test ${PIPESTATUS[0]} -eq 0)
+      - name: Fail if any offline check failed
         if: always()
         shell: bash
-        run: test "${{ steps.cargo_test.outcome }}" == "success"
+        run: |
+          test "${{ steps.cargo_test.outcome }}" == "success" && test "${{ steps.perf.outcome }}" == "success" && test "${{ steps.matrix.outcome }}" == "success" && test "${{ steps.benches.outcome }}" == "success"
       - name: Report offline diagnostics via issue
         if: failure()
         uses: actions/github-script@v7
@@ -54,8 +75,9 @@ jobs:
           script: |
             const fs=require('fs'); const path=require('path'); const {execSync}=require('child_process');
             const tmp=process.env.RUNNER_TEMP; let body='diag '+process.env.GITHUB_SHA.slice(0,7)+' '+process.env.RUNNER_OS+'\n';
-            try{ const log=fs.readFileSync(path.join(tmp,'cargo_test.log'),'utf8'); body+='\n--- cargo_test.log tail 400 --\n'+log.split('\n').slice(-400).join('\n'); body+='\n--- grep FAILED --\n'+log.split('\n').filter(l=>/FAILED|test result|failures:/i.test(l)).slice(-50).join('\n'); }catch(e){ body+='\nno log: '+e.message; }
-            try{ body+='\n--- test_matrix alone --\n'+execSync('cargo test --locked --offline --test test_matrix_ac_jalons -- --nocapture 2>&1 | tail -n 500',{encoding:'utf8',timeout:90000}).slice(-8000); }catch(e){ body+='\nmatrix err: '+((e.stdout||e.message||'')+'').slice(-8000); }
+            for(const f of ['cargo_test.log','perf.log','matrix.log','benches.log']){
+              try{ const log=fs.readFileSync(path.join(tmp,f),'utf8'); body+='\n--- '+f+' tail --\n'+log.split('\n').slice(-200).join('\n'); }catch(e){ body+='\nno '+f; }
+            }
             body=body.slice(-60000);
             await github.rest.issues.create({owner:context.repo.owner,repo:context.repo.repo,title:`ci diag ${process.env.GITHUB_SHA.slice(0,7)} ${process.env.RUNNER_OS}`,body});
   test:
@@ -78,18 +100,28 @@ jobs:
           cargo update || true
           cargo fetch || true
       - name: Test without optional connector
+        id: cargo_test_pg
         shell: bash
+        continue-on-error: true
         run: |
           cargo test --locked --offline -- --nocapture 2>&1 | tee "$RUNNER_TEMP/cargo_test.log"
           test ${PIPESTATUS[0]} -eq 0
-      - name: Fail diagnostics
+      - name: Show cargo test log
+        if: always()
+        shell: bash
+        run: cat "$RUNNER_TEMP/cargo_test.log" 2>&1 | tail -n 300 || true
+      - name: Fail if cargo_test failed
+        if: always()
+        shell: bash
+        run: test "${{ steps.cargo_test_pg.outcome }}" == "success"
+      - name: Report PG diag
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
-            const fs=require('fs'); const path=require('path');
+            const fs=require('fs'); const p=require('path');
             let body='diag PG '+process.env.GITHUB_SHA.slice(0,7)+'\n';
-            try{ const log=fs.readFileSync(path.join(process.env.RUNNER_TEMP,'cargo_test.log'),'utf8'); body+=log.slice(-10000); }catch(e){ body+='no log '+e.message; }
+            try{ body+=fs.readFileSync(p.join(process.env.RUNNER_TEMP,'cargo_test.log'),'utf8').slice(-10000); }catch(e){ body+='no log'; }
             body=body.slice(-60000);
             await github.rest.issues.create({owner:context.repo.owner,repo:context.repo.repo,title:`ci PG diag ${process.env.GITHUB_SHA.slice(0,7)}`,body});
       - name: Test with connector enabled
