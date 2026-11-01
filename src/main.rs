@@ -463,9 +463,8 @@ fn run() -> Result<(), (i32, String)> {
     // P2 connector compatibility check
     if let Ok(conn_str) = std::env::var("RUSTORM_CONNECTOR_CHECK") {
         if let Ok(kind) = rustorm::connectors_p2::ConnectorKind::parse(&conn_str.to_ascii_lowercase()) {
-            let compat = kind.check_schema_compatibility(&parsed);
-            if !compat.is_empty() {
-                return Err(fail(format!("connector {conn_str} incompatible: {}", compat.join(", "))));
+            if let Err(e) = rustorm::connectors_p2::check_schema_compatibility(kind, &parsed) {
+                return Err(fail(format!("connector {conn_str} incompatible: {e}")));
             }
         }
     }
