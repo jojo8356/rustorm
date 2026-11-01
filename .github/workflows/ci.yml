@@ -22,31 +22,9 @@ jobs:
       - name: Test without optional connector
         run: cargo test --locked --offline -- --nocapture
       - name: Test with connector enabled
-        shell: bash
-        run: |
-          set +e
-          cargo test --locked --offline --features postgres -- --nocapture 2>&1 | tee /tmp/pg.log
-          CODE=${PIPESTATUS[0]}
-          if [ $CODE -ne 0 ]; then
-            echo "::error::PG_FEATURE_FAILED $CODE"
-            TAIL=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/pg.log | tail -n 200 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
-            echo "::error::$TAIL"
-            FAIL=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/pg.log | grep -E "FAILED|failures:|error\[E|panicked" | tail -n 50 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
-            echo "::error::$FAIL"
-            exit $CODE
-          fi
+        run: cargo test --locked --offline --features postgres -- --nocapture
       - name: Test with sqlx connector enabled
-        shell: bash
-        run: |
-          set +e
-          cargo test --locked --offline --features sqlx -- --nocapture 2>&1 | tee /tmp/sqlx.log
-          CODE=${PIPESTATUS[0]}
-          if [ $CODE -ne 0 ]; then
-            echo "::error::SQLX_FAILED $CODE"
-            TAIL=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/sqlx.log | tail -n 200 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
-            echo "::error::$TAIL"
-            exit $CODE
-          fi
+        run: cargo test --locked --offline --features sqlx -- --nocapture
       - name: Run real PostgreSQL integration tests
         run: cargo test --locked --offline --features postgres --test postgres -- --ignored -- --nocapture
       - name: Run PostgreSQL migration integration tests
