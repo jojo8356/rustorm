@@ -28,7 +28,7 @@ jobs:
           s=$?
           cat /tmp/pg.log
           if [ $s -ne 0 ]; then
-            head -n 150 /tmp/pg.log > /tmp/h.log
+            head -n 200 /tmp/pg.log > /tmp/h.log
             while IFS= read -r line; do safe=$(echo "$line" | sed 's/%/%25/g' | tr -d '\r'); echo "::error::$safe"; done < /tmp/h.log
             exit $s
           fi
