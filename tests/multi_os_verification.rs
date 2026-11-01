@@ -87,7 +87,6 @@ fn ci_workflow_defines_multi_os_and_pg_matrix() {
     assert!(ci.contains("postgres"), "CI must define PG matrix");
     assert!(ci.contains("16") && ci.contains("18"), "CI must test PG 16+18");
     assert!(ci.contains("ubuntu") || ci.contains("os:"), "CI must define OS matrix (multi-OS)");
-    // multi-OS check: either explicit windows/macos or os matrix
     assert!(ci.contains("windows") || ci.contains("macos") || ci.contains("os:"), "CI must cover multi-OS (ubuntu/macos/windows offline)");
     assert!(ci.contains("cargo test"), "CI must run cargo test");
     assert!(ci.contains("--offline"), "CI must run offline tests");
@@ -97,7 +96,7 @@ fn ci_workflow_defines_multi_os_and_pg_matrix() {
 fn os_detection_is_multi_os_safe() {
     let os = std::env::consts::OS;
     assert!(["linux", "macos", "windows"].contains(&os) || !os.is_empty(), "OS must be detectable");
-    let tmp = std::env::temp_dir().join(format!("rustorm_test_{}_multi_os", std::process::id()));
+    let tmp = std::env::temp_dir().join(std::format!("rustorm_test_{}_multi_os", std::process::id()));
     std::fs::create_dir_all(&tmp).expect("temp dir creation must work on all OS");
     std::fs::remove_dir_all(&tmp).ok();
 }

@@ -58,7 +58,6 @@ model Post {
 
 #[test]
 fn prisma_diff_unsupported_syntax_report_localized_no_silent_transform() {
-    // unsupported provider should warn
     let prisma_bad = r#"
 datasource db { provider = "sqlite" url = "file:dev.db" }
 generator client { provider = "prisma-client-js" }
@@ -71,16 +70,17 @@ model User { id Int @id name String }
     }
 }
 
+#[cfg(feature = "postgres")]
 #[test]
 fn prisma_diff_error_normalization() {
-    let e = rustorm::postgres::Error::UniqueViolation { constraint: "users_email_key".into(), table: "users".into() };
+    let e = rustorm::postgres::Error::UniqueViolation { constraint: Some("users_email_key".into()), table: Some("users".into()), code: Some("23505".into()) };
     let normalized = match &e {
-        rustorm::postgres::Error::UniqueViolation { constraint, table } => format!("unique:{table}:{constraint}"),
+        rustorm::postgres::Error::UniqueViolation { constraint, table, .. } => std::format!("unique:{}:{}", table.as_deref().unwrap_or(""), constraint.as_deref().unwrap_or("")),
         _ => "".into(),
     };
     assert_eq!(normalized, "unique:users:users_email_key");
-    let e2 = rustorm::postgres::Error::ForeignKeyViolation { constraint: "fk".into() };
-    assert!(format!("{:?}", e2).contains("ForeignKeyViolation"));
+    let e2 = rustorm::postgres::Error::ForeignKeyViolation { constraint: Some("fk".into()), code: Some("23503".into()) };
+    assert!(std::format!("{:?}", e2).contains("ForeignKeyViolation"));
 }
 
 #[test]

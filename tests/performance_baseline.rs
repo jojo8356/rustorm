@@ -73,7 +73,6 @@ fn baseline_query_build_under_1ms() {
     let schema = parse(&input).unwrap();
     let start = std::time::Instant::now();
     for _ in 0..200 {
-        // Query building via schema validation is cheap; we simulate with parse+generate slice
         let _ = rustorm::migrations::initial_sql(&schema).unwrap();
     }
     let avg_ms = start.elapsed().as_millis() as f64 / 200.0;
@@ -113,13 +112,14 @@ fn perf_n_plus_one_bounded_2_requests() {
 fn perf_n_plus_one_warning_threshold() {
     reset_metrics();
     for i in 0..11 {
-        let _ = instrumented_query(&format!("n_plus_one_{i}"), || { record_query(1); });
+        let _ = instrumented_query(&std::format!("n_plus_one_{i}"), || { record_query(1); });
     }
     rustorm::perf::record_n_plus_one();
     let m = metrics();
     assert!(m.n_plus_one_warnings >= 1, "N+1 warning should be recorded after threshold");
 }
 
+#[cfg(feature = "postgres")]
 #[test]
 fn perf_redacted_no_secret_in_trace() {
     let secret_url = "postgres://user:s3cret@localhost:5432/db";

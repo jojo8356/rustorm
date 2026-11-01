@@ -24,4 +24,3 @@ path = "src/main.rs"
 
 [[bench]]
 name = "baseline"
-harness = false
