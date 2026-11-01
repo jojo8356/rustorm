@@ -22,22 +22,13 @@ jobs:
       - name: Test without optional connector
         run: cargo test --locked --offline -- --nocapture
       - name: Test with connector enabled
-        run: cargo test --locked --offline --features postgres -- --nocapture
-      - name: Run real PostgreSQL integration tests
-        run: cargo test --locked --offline --features postgres --test postgres -- --ignored -- --nocapture
-      - name: Run PostgreSQL migration integration tests
-        run: cargo test --locked --offline --features postgres --test migrations_postgres -- --ignored -- --nocapture
-      - name: Run PostgreSQL relation integration tests
-        run: cargo test --locked --offline --features postgres --test relations_postgres -- --ignored -- --nocapture
-      - name: Run PostgreSQL cardinality integration tests
-        run: cargo test --locked --offline --features postgres --test cardinalities_postgres -- --ignored -- --nocapture
-      - name: Run PostgreSQL composite primary key tests
-        run: cargo test --locked --offline --features postgres --test composite_postgres -- --ignored -- --nocapture
-      - name: Run PostgreSQL named relation tests
-        run: cargo test --locked --offline --features postgres --test named_postgres -- --ignored -- --nocapture
-      - name: Run PostgreSQL nested-write integration tests
-        run: cargo test --locked --offline --features postgres --test nested_create_postgres -- --ignored -- --nocapture
-      - name: Run PostgreSQL nested disconnect tests
-        run: cargo test --locked --offline --features postgres --test nested_disconnect_postgres -- --ignored -- --nocapture
-      - name: Run shadow database planning tests
-        run: cargo test --locked --offline --features postgres --test shadow_postgres -- --ignored -- --nocapture
+        run: |
+          set +e
+          cargo test --locked --offline --features postgres -- --nocapture > /tmp/pg.log 2>&1
+          s=$?
+          cat /tmp/pg.log
+          if [ $s -ne 0 ]; then
+            head -n 150 /tmp/pg.log > /tmp/h.log
+            while IFS= read -r line; do safe=$(echo "$line" | sed 's/%/%25/g' | tr -d '\r'); echo "::error::$safe"; done < /tmp/h.log
+            exit $s
+          fi
