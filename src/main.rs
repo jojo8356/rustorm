@@ -667,6 +667,7 @@ fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
     if effective_action != "resolve"
         && effective_action != "baseline"
         && effective_action != "plan"
+        && effective_action != "squash"
         && (name.is_some() || applied || rolled_back || confirm || preview)
     {
         // preview only for deploy; for other actions preview is invalid
