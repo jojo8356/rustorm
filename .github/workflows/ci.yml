@@ -26,16 +26,15 @@ jobs:
           code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
             echo "### offline failure log" >> $GITHUB_STEP_SUMMARY
-            cat /tmp/offline.log >> $GITHUB_STEP_SUMMARY || true
-            # push log to repo via contents API for retrieval (allowed host api.github.com)
-            CONTENT=$(base64 -w 0 /tmp/offline.log | head -c 100000)
-            SHA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/jojo8356/rustorm/contents/ci-failure.log | jq -r .sha 2>/dev/null)
-            if [ "$SHA" = "null" ] || [ -z "$SHA" ]; then SHA=""; fi
-            if [ -z "$SHA" ]; then
-              curl -s -X PUT -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/json" -d "{\"message\":\"ci log $GITHUB_RUN_ID\",\"content\":\"$CONTENT\"}" https://api.github.com/repos/jojo8356/rustorm/contents/ci-failure.log || true
-            else
-              curl -s -X PUT -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/json" -d "{\"message\":\"ci log $GITHUB_RUN_ID\",\"content\":\"$CONTENT\",\"sha\":\"$SHA\"}" https://api.github.com/repos/jojo8356/rustorm/contents/ci-failure.log || true
-            fi
+            cat /tmp/offline.log | head -n 500 >> $GITHUB_STEP_SUMMARY || true
+            # push log via git for retrieval (allowed host github.com)
+            git config user.name "ci-bot"
+            git config user.email "ci@ci.local"
+            cat /tmp/offline.log | head -n 500 > /tmp/ci-failure.log
+            cp /tmp/ci-failure.log ci-failure.log
+            git add ci-failure.log
+            git commit -m "ci log $GITHUB_RUN_ID [skip ci]" || true
+            git push origin HEAD:arena/8eafecda-rustorm || true
             exit $code
           fi
         env:
