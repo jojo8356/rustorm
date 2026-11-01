@@ -11,7 +11,7 @@ fn prisma_diff_pg_ddl_hash_identical_on_16_and_18() {
         return;
     }
     let schema = parse(r#"model User { id Int @id name String email String @unique }"#).unwrap();
-    let sql = migrations::initial_sql(&schema);
+    let sql = migrations::initial_sql(&schema).unwrap();
     let hash = checksum::sha256(sql.as_bytes());
     // Compare to Prisma 7 fixture imported DDL hash (offline deterministic)
     assert!(!hash.is_empty());
