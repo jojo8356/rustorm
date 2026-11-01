@@ -15,28 +15,26 @@ jobs:
           cargo fetch || true
       - name: Test without optional connector (offline, multi-OS)
         shell: bash
-        run: |
-          set -o pipefail
-          cargo test --locked --offline -- --nocapture 2>&1 | tee "${RUNNER_TEMP}/offline.log"
-          EXIT=${PIPESTATUS[0]}
-          if [ $EXIT -ne 0 ]; then
-            echo "::group::offline.log tail"
-            tail -n 800 "${RUNNER_TEMP}/offline.log" || true
-            echo "::endgroup::"
-            echo "=== grep FAILED ==="
-            grep -E "FAILED|failed|error\[E|test result:" "${RUNNER_TEMP}/offline.log" | tail -n 100 || true
-            exit $EXIT
-          fi
-      - name: Report offline failure via gh
+        run: cargo test --locked --offline -- --nocapture
+      - name: Report offline failure diagnostics
         if: failure()
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tail -n 500 "${RUNNER_TEMP}/offline.log" > /tmp/fail.log 2>&1 || true
-          echo "=== fail.log ===" >> /tmp/fail.log
-          grep -E "FAILED|failed|error" "${RUNNER_TEMP}/offline.log" | tail -n 200 >> /tmp/fail.log || true
-          gh issue create --title "ci offline failed ${GITHUB_SHA:0:7} ${{ matrix.os }}" --body-file /tmp/fail.log || true
+          echo "=== cargo test --offline -- --list ==="
+          cargo test --locked --offline -- --list 2>&1 | tail -n 200 || true
+          echo "=== cargo test performance_baseline ==="
+          cargo test --locked --offline --test performance_baseline -- --nocapture 2>&1 | tail -n 200 || true
+          echo "=== cargo test test_matrix_ac_jalons ==="
+          cargo test --locked --offline --test test_matrix_ac_jalons -- --nocapture 2>&1 | tail -n 200 || true
+          echo "=== cargo test prisma_diff ==="
+          cargo test --locked --offline --test prisma_diff -- --nocapture 2>&1 | tail -n 200 || true
+          echo "=== cargo check ==="
+          cargo check --offline 2>&1 | tail -n 100 || true
+          # Create issue with diagnostics
+          cargo test --locked --offline -- --nocapture 2>&1 | tail -n 500 > /tmp/diag.log || true
+          gh issue create --title "ci offline diag ${GITHUB_SHA:0:7} ${{ matrix.os }}" --body-file /tmp/diag.log || true
       - name: Check performance baseline budgets (offline)
         shell: bash
         run: cargo test --locked --offline --test performance_baseline -- --nocapture
@@ -67,17 +65,7 @@ jobs:
           cargo fetch || true
       - name: Test without optional connector
         shell: bash
-        run: |
-          set -o pipefail
-          cargo test --locked --offline -- --nocapture 2>&1 | tee "${RUNNER_TEMP}/offline_pg.log"
-      - name: Report PG offline failure via gh
-        if: failure()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          tail -n 500 "${RUNNER_TEMP}/offline_pg.log" > /tmp/fail_pg.log 2>&1 || true
-          gh issue create --title "ci PG offline failed ${GITHUB_SHA:0:7} pg${{ matrix.postgres }}" --body-file /tmp/fail_pg.log || true
+        run: cargo test --locked --offline -- --nocapture
       - name: Test with connector enabled
         shell: bash
         run: cargo test --locked --offline --features postgres -- --nocapture
