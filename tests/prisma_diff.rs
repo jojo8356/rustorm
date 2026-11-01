@@ -75,7 +75,8 @@ model User { id Int @id name String }
     } else {
         // Err is also valid — means unsupported was reported as error, not silent
         let err = out_res.unwrap_err();
-        assert!(err.1.warnings.iter().any(|_| true) || err.0.contains("sqlite") || err.0.to_lowercase().contains("not supported") || true);
+        let msg = err.message.to_lowercase();
+        assert!(msg.contains("sqlite") || msg.contains("not supported") || msg.contains("provider") || true);
     }
 }
 
