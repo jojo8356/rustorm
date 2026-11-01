@@ -238,7 +238,7 @@ impl Pool {
     pub fn status(&self) -> PoolMetrics { self.metrics() }
     /// Create a transaction with full interactive options (isolation, timeout, retry)
     pub fn transaction<F, T>(&self, opts: TransactionOptions, f: F) -> Result<T, Error>
-    where F: FnOnce(&mut Transaction<'_>) -> Result<T, Error> {
+    where F: FnMut(&mut Transaction<'_>) -> Result<T, Error> {
         let mut conn = self.get()?.into_inner();
         conn.transaction_with_options(opts, f)
     }
@@ -880,8 +880,8 @@ impl Connection {
         Ok(Transaction { connection: self, active: true })
     }
     /// Interactive transaction helper: commit on Ok, rollback on Err or panic (VAL-TX01)
-    pub fn transaction<F, T>(&mut self, f: F) -> Result<T, Error>
-    where F: FnOnce(&mut Transaction<'_>) -> Result<T, Error> {
+    pub fn transaction<F, T>(&mut self, mut f: F) -> Result<T, Error>
+    where F: FnMut(&mut Transaction<'_>) -> Result<T, Error> {
         self.transaction_with_options(TransactionOptions::default(), f)
     }
     pub fn transaction_with_options<F, T>(&mut self, opts: TransactionOptions, mut f: F) -> Result<T, Error>
