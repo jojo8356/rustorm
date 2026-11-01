@@ -323,6 +323,10 @@ impl AsyncPool {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IsolationLevel { ReadCommitted, RepeatableRead, Serializable }
+impl IsolationLevel { pub fn sql(self) -> &'static str { match self { Self::ReadCommitted => "READ COMMITTED", Self::RepeatableRead => "REPEATABLE READ", Self::Serializable => "SERIALIZABLE", } } }
+
 #[derive(Debug, Clone)]
 pub struct TransactionOptions {
     pub isolation: IsolationLevel,
