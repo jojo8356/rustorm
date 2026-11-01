@@ -21,9 +21,16 @@ jobs:
         shell: bash
         run: |
           echo "=== offline.log tail ==="
-          tail -n 400 "$RUNNER_TEMP/offline.log" || cat "$RUNNER_TEMP/offline.log" || true
-          echo "=== cargo check ==="
-          cargo check --offline 2>&1 | head -n 100 || true
+          tail -n 500 "$RUNNER_TEMP/offline.log" || cat "$RUNNER_TEMP/offline.log" || true
+          echo "=== cargo check offline ==="
+          cargo check --offline 2>&1 | tail -n 200 || true
+      - name: Upload offline log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-log-${{ matrix.os }}
+          path: ${{ runner.temp }}/offline.log
+          retention-days: 1
       - name: Check performance baseline budgets (offline)
         shell: bash
         run: cargo test --locked --offline --test performance_baseline -- --nocapture
@@ -42,9 +49,12 @@ jobs:
             const path = require('path');
             const logPath = path.join(process.env.RUNNER_TEMP || '/tmp', 'offline.log');
             let log = '';
-            try { log = fs.readFileSync(logPath, 'utf8').slice(-60000); } catch(e) { log = 'no log: '+e + ' path='+logPath; }
-            const title = `ci offline failed ${context.sha.slice(0,7)}`;
-            const body = '```\n' + log.slice(-50000) + '\n```';
+            try { 
+              const content = fs.readFileSync(logPath, 'utf8');
+              log = content.split('\n').slice(-300).join('\n').slice(-50000);
+            } catch(e) { log = 'no log: '+e + ' path='+logPath; }
+            const title = `ci offline failed ${context.sha.slice(0,7)} ${process.env.RUNNER_OS || ''}`;
+            const body = '```\n' + log + '\n```';
             await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body});
   test:
     runs-on: ubuntu-latest
@@ -71,7 +81,14 @@ jobs:
       - name: Dump PG log on failure
         if: failure()
         shell: bash
-        run: tail -n 400 "$RUNNER_TEMP/offline_pg.log" || cat "$RUNNER_TEMP/offline_pg.log" || true
+        run: tail -n 500 "$RUNNER_TEMP/offline_pg.log" || cat "$RUNNER_TEMP/offline_pg.log" || true
+      - name: Upload PG log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-pg-log-${{ matrix.postgres }}
+          path: ${{ runner.temp }}/offline_pg.log
+          retention-days: 1
       - name: Test with connector enabled
         shell: bash
         run: cargo test --locked --offline --features postgres -- --nocapture
@@ -129,7 +146,10 @@ jobs:
             const path = require('path');
             const logPath = path.join(process.env.RUNNER_TEMP || '/tmp', 'offline_pg.log');
             let log = '';
-            try { log = fs.readFileSync(logPath, 'utf8').slice(-60000); } catch(e) { log = 'no log: '+e + ' path='+logPath; }
-            const title = `ci PG failed ${context.sha.slice(0,7)}`;
-            const body = '```\n' + log.slice(-50000) + '\n```';
+            try { 
+              const content = fs.readFileSync(logPath, 'utf8');
+              log = content.split('\n').slice(-300).join('\n').slice(-50000);
+            } catch(e) { log = 'no log: '+e + ' path='+logPath; }
+            const title = `ci PG failed ${context.sha.slice(0,7)} pg${process.env.matrix_postgres || ''}`;
+            const body = '```\n' + log + '\n```';
             await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body});
