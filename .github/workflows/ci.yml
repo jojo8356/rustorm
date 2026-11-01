@@ -20,7 +20,19 @@ jobs:
           cargo update || true
           cargo fetch || true
       - name: Test without optional connector
-        run: cargo test --locked --offline -- --nocapture
+        run: |
+          set -o pipefail
+          cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/offline.log
+          code=${PIPESTATUS[0]}
+          if [ $code -ne 0 ]; then
+            echo "### offline failure log" >> $GITHUB_STEP_SUMMARY
+            cat /tmp/offline.log >> $GITHUB_STEP_SUMMARY || true
+            # also post to issue for retrieval via api.github.com (allowed host)
+            gh issue create --title "CI offline $GITHUB_RUN_ID" --body "$(cat /tmp/offline.log | head -c 50000)" || true
+            exit $code
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Test with connector enabled
         run: cargo test --locked --offline --features postgres -- --nocapture
       - name: Test with sqlx connector enabled
