@@ -489,7 +489,7 @@ fn multifile_schema_via_directory() {
     // validate via directory should succeed
     let out = t.run(&["validate", "--schema", "schemas"]);
     success(&out);
-    // generate via directory
-    let out = t.run(&["generate", "--schema", "schemas"]);
+    // generate via directory with explicit output inside project
+    let out = t.run(&["generate", "--schema", "schemas", "--output", "src/generated/rustorm/mod.rs"]);
     success(&out);
 }
