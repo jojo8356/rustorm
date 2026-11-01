@@ -106,7 +106,7 @@ fn prisma_diff_nullability_roundtrip() {
 #[test]
 fn prisma_diff_results_same_schema_same_ddls() {
     let input = rsm(r#"
-model User { id Int @id name String email String @unique }
+model User { id Int @id name String email String @unique posts Post[] }
 model Post { id Int @id title String authorId Int author User @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade) }
 "#);
     let schema = parse(&input).unwrap();
