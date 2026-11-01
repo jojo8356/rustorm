@@ -731,10 +731,10 @@ fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
         #[cfg(not(feature = "postgres"))]
         return Err(fail("migrate reset requires --features postgres"));
     }
-    if let Some(st) = strategy {
+    if let Some(st) = &strategy {
         eprintln!("warning: --strategy {st} P2 stub, proceeding with normal deploy");
     }
-    if let Some(url) = shadow_url {
+    if let Some(url) = shadow_url.clone() {
         eprintln!("info: --shadow-url {url} provided (P2), will use if SHADOW_DATABASE_URL not set");
         if std::env::var("SHADOW_DATABASE_URL").is_err() {
             std::env::set_var("SHADOW_DATABASE_URL", url);
