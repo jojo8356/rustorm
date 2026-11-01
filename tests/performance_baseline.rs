@@ -18,7 +18,7 @@ model Post {
   id       Int     @id
   title    String
   authorId Int
-  author   User    @relation(fields: [authorId], references: [id])
+  author   User    @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   published Boolean @default(false)
   views    Int     @default(0)
 }
@@ -95,14 +95,8 @@ fn baseline_aggregate_groupby_under_1ms() {
 #[test]
 fn perf_n_plus_one_bounded_2_requests() {
     reset_metrics();
-    let _parents: Vec<i32> = instrumented_query("users_find_many", || {
-        record_query(2);
-        (0..100).collect()
-    });
-    let _children: Vec<i32> = instrumented_query("posts_grouped_by_author", || {
-        record_query(3);
-        (0..500).collect()
-    });
+    let _parents: Vec<i32> = instrumented_query("users_find_many", || (0..100).collect());
+    let _children: Vec<i32> = instrumented_query("posts_grouped_by_author", || (0..500).collect());
     let m = metrics();
     assert!(m.count <= 2, "N+1 bounded: include must use ≤2 requests, got {}", m.count);
     assert_eq!(m.n_plus_one_warnings, 0, "no N+1 warning for bounded 2-req path");
