@@ -187,13 +187,23 @@ pub struct PoolMetrics {
     pub waiting: usize,
     pub created: usize,
 }
-/// PoolConfig per §6.4: max, timeouts, idle
-#[derive(Debug, Clone)]
+/// PoolConfig per §6.4: max, timeouts, idle — Debug redacts URL.
+#[derive(Clone)]
 pub struct PoolConfig {
     pub url: String,
     pub max_connections: usize,
     pub connection_timeout: Duration,
     pub idle_timeout: Option<Duration>,
+}
+impl fmt::Debug for PoolConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PoolConfig")
+            .field("url", &redacted_url(&self.url))
+            .field("max_connections", &self.max_connections)
+            .field("connection_timeout", &self.connection_timeout)
+            .field("idle_timeout", &self.idle_timeout)
+            .finish()
+    }
 }
 impl PoolConfig {
     pub fn new(url: impl Into<String>, max_connections: usize) -> Self {
@@ -282,7 +292,17 @@ pub struct AsyncPool {
     inner: deadpool::managed::Pool<PgManager>,
 }
 pub struct PgManager { url: String }
+impl fmt::Debug for PgManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PgManager").field("url", &redacted_url(&self.url)).finish()
+    }
+}
 pub type AsyncPooledConnection = deadpool::managed::Object<PgManager>;
+impl fmt::Debug for AsyncPool {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AsyncPool").field("config", &self.config).field("max_connections", &self.config.max_connections).finish()
+    }
+}
 impl deadpool::managed::Manager for PgManager {
     type Type = Connection;
     type Error = Error;
@@ -359,6 +379,10 @@ fn redacted_sql(sql: &str) -> String {
     let mut s = sql.trim().replace('\n', " ");
     if s.len() > 200 { s.truncate(200); s.push_str("…") }
     s
+}
+/// Redact database URLs (passwords, hosts) for logs/traces — never expose secrets.
+pub fn redacted_url(_url: &str) -> &'static str {
+    "[REDACTED]"
 }
 fn trace_query(sql: &str, duration_ms: u64, rows: Option<u64>) {
     if std::env::var("RUSTORM_TRACE").is_ok() {
@@ -963,7 +987,7 @@ pub struct Transaction<'a> {
     connection: &'a mut Connection,
     active: bool,
 }
-impl fmt::Debug for Transaction<'_> {
+impl<'a> fmt::Debug for Transaction<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Transaction").field("active", &self.active).finish()
     }

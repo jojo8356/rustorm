@@ -29,11 +29,29 @@
 - `src/connector.rs::sqlx_impl::SqlxConnector` impl `AsyncConnector` + `Connector` via trait object (feature `sqlx`)
 - Tests `connector_trait::trait_has_two_impls_mock_and_connection` + `trait_object_dyn_connector` — compilation avec deux impls vérifiée.
 
+## Vérification SEC-001 (sécurité, isolation, RLS)
+
+| Critère | PG16 | PG18 | Test offline | Test PG |
+|---|---|---|---|---|
+| `DEFERRABLE`/`SET DEFAULT` rejeté au parse | ✅ | ✅ | `security_fuzz::fuzz_schema_rejects_deferrable_set_default` | — |
+| `$N` paramétré, injection OWASP traitée comme valeur | ✅ | ✅ | `security_fuzz::fuzz_injection_payloads_are_parameterized`, `fuzz_all_query_builders_are_parameterized` | — |
+| `READ COMMITTED` défaut, `SERIALIZABLE` bloqué | ✅ | ✅ | — | `security_postgres::isolation_must_be_read_committed`, `transaction_uses_read_committed_default` |
+| RLS `row_security_active` bloquant | ✅ | ✅ | — | `security_postgres::rls_blocks_nested_write` (FORCE RLS) |
+| Trigger `pg_trigger` bloquant | ✅ | ✅ | — | `security_postgres::trigger_blocks_nested_write` |
+| Rule `pg_rewrite` bloquant | ✅ | ✅ | — | `security_postgres::rule_blocks_nested_write` |
+| FK `NOT deferrable` + `ON UPDATE CASCADE` testé | ✅ | ✅ | — | `security_postgres::on_update_cascade_is_tested` |
+| Expurgation `redacted_url` `[REDACTED]` | ✅ | ✅ | `security_fuzz::expurgation_*` | — |
+| Shadow éphémère `ShadowTxGuard` rollback même en erreur | ✅ | ✅ | — | `security_postgres::shadow_ephemeral_even_on_error` |
+
+- **Fuzz** : 1000 entrées aléatoires `fuzz_schema_no_panic_on_random` sans panic, online PG identique.
+- **Isolation documentée** : `SECURITY.md` §7 détaille `READ COMMITTED`, RLS, trigger/rule, deferrable.
+
 ## Exécution locale
 
 ```sh
-cargo test --offline -- --nocapture # sans PG, 30+ tests offline
-cargo test --features postgres --test connector_postgres -- --ignored --nocapture # PG16/18
+cargo test --offline -- --nocapture # sans PG, 30+ offline + security_fuzz 6
+cargo test --features postgres -- --ignored --nocapture # PG16/18 + security_postgres 7
+cargo test --features postgres --test connector_postgres -- --ignored --nocapture # PG16/18 trait
 cargo test --features sqlx --test connector_sqlx -- --ignored --nocapture # second runtime
 ```
 

@@ -2,13 +2,13 @@
   "feature": "Rustorm — couverture complète du cahier des charges v0.1",
   "contract": "docs/CAHIER_DES_CHARGES.md (§3 Périmètre, §5 Langage .rsm, §6 Client, §7 Migrations/Introspection, §8 CLI, §9 Sécu/Perf, §10 AC-01..17, §11 Jalons M0-M6)",
   "previous_json": "docs/features/NESTED_WRITES_TODO.json (supprimé 2026-10-31 — 6/6 R2 validated true, commit 966a751 → consolidé dans RELATIONS.md v1.2)",
-  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 36/39 validated ; 3 partial sync-only documentés (CLI/Sécu/Testing) — voir fiches.",
+  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 37/39 validated ; 2 partial sync-only documentés (CLI/Sécu/Testing) — voir fiches.",
   "generated": "2026-11-02",
   "stats": {
     "total_items": 39,
     "missing": 0,
-    "partial": 3,
-    "done_validated": 36,
+    "partial": 2,
+    "done_validated": 37,
     "p0": 24,
     "p1": 8,
     "p2": 7
@@ -340,10 +340,10 @@
       "feature_doc": "docs/features/SECURITY.md",
       "scope": "§9 §10 R2+",
       "priority": "P0",
-      "status": "partial",
-      "validated": false,
-      "evidence": "src/schema.rs deferrable guard partiel + expurgation partielle",
-      "remaining": "P0 paramétré+env() ok — reste RLS/trigger/policy, fuzz, expurgation exhaustive. Fiche SECURITY.md §4"
+      "status": "done",
+      "validated": true,
+      "evidence": "src/schema.rs deferrable/initially/setdefault guard + onDelete SetDefault reject; src/postgres.rs redacted_url + PoolConfig/PgManager/AsyncPool Debug expurgés; src/migration_plan.rs ShadowTxGuard rollback even on error; tests/security_fuzz.rs 6 offline (injection OWASP, deferrable, fuzz 1000, paramérisé, expurgation), tests/security_postgres.rs 7 PG (RLS FORCE, trigger, rule, READ COMMITTED, onUpdate CASCADE, shadow ephemeral)",
+      "remaining": "done - SECURITY.md v1.1 Done 2026-11-02, MATRIX.md § SEC-001, tous AC-Sec-01..07 verts"
     },
     {
       "id": "PERF-OBSERVABILITY",
@@ -469,5 +469,5 @@
       "QUERY_ENGINE findUnique/aggregate/json/distinct"
     ]
   },
-  "harmonization_note": "2026-11-02 CLIENT-003 + CONN-0011 livrés : TX-ASYNC-POOL + CONN-TRAIT-PG18 (Connector trait + Mock + sqlx + TLS + matrice PG16/18 formelle). Reste 3 partial sync-only (CLI/Sécu/Testing). Note 2026-11-01 : TODO annonçait 39/39 done (0 partiel) alors que 5 fiches s'auto-déclarent partielles — aligné 34+5."
+  "harmonization_note": "2026-11-02 CLIENT-003 + CONN-0011 livrés : TX-ASYNC-POOL + CONN-TRAIT-PG18 (Connector trait + Mock + sqlx + TLS + matrice PG16/18 formelle). Reste 2 partial sync-only (CLI/Testing) — SEC-001 Done 2026-11-02. Note 2026-11-01 : TODO annonçait 39/39 done (0 partiel) alors que 5 fiches s'auto-déclarent partielles — aligné 34+5."
 }

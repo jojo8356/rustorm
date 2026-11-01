@@ -229,7 +229,9 @@ fn mock_connector_behavior() {
 #[test]
 fn mock_connector_begin_error() {
     let mut mock = MockConnector::new();
-    let err = mock.begin().unwrap_err();
+    let res = mock.begin();
+    assert!(res.is_err());
+    let err = res.err().unwrap();
     assert!(matches!(err, Error::InvalidInput(_)));
 }
 
