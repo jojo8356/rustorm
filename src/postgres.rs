@@ -297,7 +297,7 @@ impl AsyncPool {
     }
     pub fn with_config(cfg: PoolConfig) -> Self {
         let manager = PgManager { url: cfg.url.clone() };
-        let inner = deadpool::managed::Pool::builder(manager).max_size(cfg.max_connections).create_timeout(Some(cfg.connection_timeout)).recycle_timeout(Some(cfg.connection_timeout)).wait_timeout(Some(cfg.connection_timeout)).build().expect("pool build");
+        let inner = deadpool::managed::Pool::builder(manager).max_size(cfg.max_connections).runtime(deadpool::Runtime::Tokio1).create_timeout(Some(cfg.connection_timeout)).recycle_timeout(Some(cfg.connection_timeout)).wait_timeout(Some(cfg.connection_timeout)).build().expect("pool build");
         Self { config: cfg, inner }
     }
     pub fn max_connections(&self) -> usize { self.config.max_connections }
