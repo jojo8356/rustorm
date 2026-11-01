@@ -36,10 +36,9 @@ jobs:
       - name: Build release library + CLI
         shell: bash
         run: |
-          cargo build --release --target ${{ matrix.target }} --all-features
-          cargo build --release --target ${{ matrix.target }}
-          ls -lh target/${{ matrix.target }}/release/rustorm* || true
-          ls -lh target/${{ matrix.target }}/release/*.r* || true
+          cargo build --release --target ${{ matrix.target }} 2>&1 | tail -n 30
+          cargo build --release --target ${{ matrix.target }} --all-features 2>&1 | tail -n 30 || true
+          ls -lh target/${{ matrix.target }}/release/rustorm* 2>&1 | head -n 20 || ls -lh target/release/rustorm* 2>&1 | head -n 20 || true
       - name: Package crate
         shell: bash
         run: |
@@ -55,13 +54,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/${{ matrix.bin }} dist/rustorm-${{ matrix.target }}${{ matrix.target == 'x86_64-pc-windows-msvc' && '.exe' || '' }} 2>&1 || cp target/${{ matrix.target }}/release/rustorm dist/rustorm-${{ matrix.target }} || true
-          # also copy rlib/rmeta for library reuse example
-          cp target/${{ matrix.target }}/release/librustorm.rlib dist/ 2>&1 || true
-          cp target/${{ matrix.target }}/release/deps/librustorm-*.r* dist/ 2>&1 || true
+          cp target/${{ matrix.target }}/release/${{ matrix.bin }} dist/rustorm-${{ matrix.target }} 2>&1 || cp target/release/${{ matrix.bin }} dist/rustorm-${{ matrix.target }} 2>&1 || cp target/${{ matrix.target }}/release/rustorm dist/rustorm-${{ matrix.target }} 2>&1 || true
           cp target/package/*.crate dist/ 2>&1 || true
           cp rustorm-docs-*.tar.gz dist/ 2>&1 || true
-          ls -lh dist/
+          ls -lh dist/ || true
       - uses: actions/upload-artifact@v4
         with:
           name: rustorm-${{ matrix.target }}
