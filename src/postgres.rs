@@ -287,7 +287,7 @@ impl deadpool::managed::Manager for PgManager {
         tokio::task::spawn_blocking(move || Connection::connect(&url)).await.map_err(|_| Error::Connection)?
     }
     async fn recycle(&self, conn: &mut Connection, _metrics: &deadpool::managed::Metrics) -> deadpool::managed::RecycleResult<Error> {
-        if conn.transaction_is_idle() { Ok(()) } else { Err(deadpool::managed::RecycleError::StaticMessage("connection not idle — discard")) }
+        if conn.transaction_is_idle() { Ok(()) } else { Err(deadpool::managed::RecycleError::Message("connection not idle — discard".into())) }
     }
 }
 impl AsyncPool {
