@@ -28,12 +28,14 @@ jobs:
           if [ $code -ne 0 ]; then
             echo "### offline failure log" >> $GITHUB_STEP_SUMMARY
             cat /tmp/offline.log | head -n 500 >> $GITHUB_STEP_SUMMARY || true
-            # create issue via api.github.com for retrieval (allowed host)
-            jq -n --arg body "$(cat /tmp/offline.log | head -n 400)" --arg title "CI log $GITHUB_RUN_ID" '{title: $title, body: $body}' > /tmp/issue.json
-            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/json" -d @/tmp/issue.json https://api.github.com/repos/jojo8356/rustorm/issues || true
+            # try to create issue via gh for retrieval (allowed host api.github.com)
+            echo "attempt gh issue create" >> $GITHUB_STEP_SUMMARY
+            gh issue create --title "CI log $GITHUB_RUN_ID" --body "$(cat /tmp/offline.log | head -n 200)" --repo jojo8356/rustorm 2>&1 | head -n 20 >> $GITHUB_STEP_SUMMARY || true
+            cat /tmp/offline.log | head -n 100 >> $GITHUB_STEP_SUMMARY || true
             exit $code
           fi
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Test with connector enabled
         run: cargo test --locked --offline --features postgres -- --nocapture
