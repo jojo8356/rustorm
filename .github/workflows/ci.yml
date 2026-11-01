@@ -15,7 +15,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y libpq-dev
-      - name: Update Cargo lock for new deps
-        run: cargo update --locked 2>&1 | head -n 100; cargo check --locked 2>&1 | tail -n 20
       - name: Test without optional connector
-        run: cargo test --locked --offline -- --nocapture
+        run: |
+          cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/offline.log
+          s=${PIPESTATUS[0]}
+          if [ $s -ne 0 ]; then
+            echo "----FAIL TAIL----"
+            tail -n 200 /tmp/offline.log
+            grep -E "error\[E|FAILED|failures:" /tmp/offline.log | head -n 80 || true
+            exit $s
+          fi
