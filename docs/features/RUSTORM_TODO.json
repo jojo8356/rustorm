@@ -2,13 +2,13 @@
   "feature": "Rustorm — couverture complète du cahier des charges v0.1",
   "contract": "docs/CAHIER_DES_CHARGES.md (§3 Périmètre, §5 Langage .rsm, §6 Client, §7 Migrations/Introspection, §8 CLI, §9 Sécu/Perf, §10 AC-01..17, §11 Jalons M0-M6)",
   "previous_json": "docs/features/NESTED_WRITES_TODO.json (supprimé 2026-10-31 — 6/6 R2 validated true, commit 966a751 → consolidé dans RELATIONS.md v1.2)",
-  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 24 P0 + 8 P1 + 7 P2 validated via p0_*/p1_*/p2_*.rs + p1_m5_completion.rs (total 85+ tests); 0 partial/missing. M5 P1 fully validated via p1_m5_completion.rs.",
-  "generated": "2026-10-31",
+  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 34/39 validated ; 5 partial sync-only documentés (CLI/Transactions/Connectors/Sécu/Testing) — voir fiches.",
+  "generated": "2026-11-01",
   "stats": {
     "total_items": 39,
     "missing": 0,
-    "partial": 0,
-    "done_validated": 39,
+    "partial": 5,
+    "done_validated": 34,
     "p0": 24,
     "p1": 8,
     "p2": 7
@@ -241,10 +241,10 @@
       "feature_doc": "docs/features/TRANSACTIONS.md",
       "scope": "§6.4 §9",
       "priority": "P0",
-      "status": "done",
-      "validated": true,
-      "evidence": "src/postgres.rs Pool + IsolationLevel; sync transaction guard retained, async documented P1",
-      "remaining": "done - see evidence"
+      "status": "partial",
+      "validated": false,
+      "evidence": "src/postgres.rs Transaction sync + savepoint + Drop rollback ; sync-only livré, async documenté P1",
+      "remaining": "P0 livré sync-only (CDC §3) — reste async tokio + pool + isolation/timeout/retry. Fiche TRANSACTIONS.md §3. Non bloquant v0.1"
     },
     {
       "id": "TX-ERRORS-TYPED",
@@ -263,10 +263,10 @@
       "feature_doc": "docs/features/CONNECTORS.md",
       "scope": "§3 §6 P1",
       "priority": "P0",
-      "status": "done",
-      "validated": true,
-      "evidence": "src/postgres.rs trait Connector + Pool, impl for Connection; PG16/18 via CI matrix",
-      "remaining": "done - see evidence"
+      "status": "partial",
+      "validated": false,
+      "evidence": "src/postgres.rs libpq sync PG16/18 via CI ; 1 connecteur livré",
+      "remaining": "P0 livré 1 connecteur sync libpq — reste trait Connector + sqlx async + TLS. Fiche CONNECTORS.md §3"
     },
     {
       "id": "MIG-DEV-SHADOW",
@@ -318,10 +318,10 @@
       "feature_doc": "docs/features/CLI.md",
       "scope": "§8 P0",
       "priority": "P0",
-      "status": "done",
-      "validated": true,
-      "evidence": "src/main.rs migrate dev alias, rustorm.toml, --json validate, migration_lock; tests/p0_cli.rs",
-      "remaining": "done - see evidence"
+      "status": "partial",
+      "validated": false,
+      "evidence": "src/main.rs migrate create/status/deploy/plan + dev alias ; 6/12 commandes",
+      "remaining": "P0 partiel documenté CLI.md §3 — reste resolve/baseline checksum, deploy --preview, rustorm.toml, db pull réel"
     },
     {
       "id": "CLI-ADVANCED-P1",
@@ -340,10 +340,10 @@
       "feature_doc": "docs/features/SECURITY.md",
       "scope": "§9 §10 R2+",
       "priority": "P0",
-      "status": "done",
-      "validated": true,
-      "evidence": "src/schema.rs deferrable guard, src/postgres.rs typed errors, query param redaction; tests/p0_cli.rs deferrable_rejected",
-      "remaining": "done - see evidence"
+      "status": "partial",
+      "validated": false,
+      "evidence": "src/schema.rs deferrable guard partiel + expurgation partielle",
+      "remaining": "P0 paramétré+env() ok — reste RLS/trigger/policy, fuzz, expurgation exhaustive. Fiche SECURITY.md §4"
     },
     {
       "id": "PERF-OBSERVABILITY",
@@ -362,10 +362,10 @@
       "feature_doc": "docs/features/TESTING.md",
       "scope": "§10 §11",
       "priority": "P0",
-      "status": "done",
-      "validated": true,
-      "evidence": "tests/p0_*.rs 27 new tests covering AC-01..17 P0, plus existing matrix; CI pg 16/18",
-      "remaining": "done - see evidence"
+      "status": "partial",
+      "validated": false,
+      "evidence": "tests/p0/p1/p2 + CI PG16/18 vert ; hors perf chiffrée",
+      "remaining": "P0 tests ciblés — reste perf baseline + matrice Prisma7 + multi-OS. Fiche TESTING.md §8"
     },
     {
       "id": "RELATIONS-CARDINALITIES-POLISH",
@@ -468,5 +468,6 @@
       "INTROSPECTION db pull",
       "QUERY_ENGINE findUnique/aggregate/json/distinct"
     ]
-  }
+  },
+  "harmonization_note": "2026-11-01 harmonisation juridique/doc : TODO annonçait 39/39 done (0 partiel) alors que 5 fiches s'auto-déclarent partielles. On aligne sur réalité : 34 done + 5 partial sync-only. Aucun code changé, promesse conforme CDC §3 P0 sync-only."
 }
