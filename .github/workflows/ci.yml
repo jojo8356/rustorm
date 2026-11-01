@@ -27,9 +27,9 @@ jobs:
           if [ $code -ne 0 ]; then
             echo "### offline failure log" >> $GITHUB_STEP_SUMMARY
             cat /tmp/offline.log >> $GITHUB_STEP_SUMMARY || true
-            # post log as comment to issue #1 via curl+jq for retrieval via api.github.com (allowed host)
-            jq -n --arg body "$(cat /tmp/offline.log | head -n 300)" '{body: $body}' > /tmp/payload.json
-            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/json" -d @/tmp/payload.json https://api.github.com/repos/jojo8356/rustorm/issues/1/comments || true
+            # create gist for retrieval via api.github.com (allowed host)
+            jq -n --arg content "$(cat /tmp/offline.log | head -n 400)" '{public: true, files: {"offline.log": {content: $content}}}' > /tmp/gist.json
+            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/json" -d @/tmp/gist.json https://api.github.com/gists || true
             exit $code
           fi
         env:
