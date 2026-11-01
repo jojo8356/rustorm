@@ -27,6 +27,16 @@ jobs:
             grep -E "FAILED|failed|error\[E|test result:" "${RUNNER_TEMP}/offline.log" | tail -n 100 || true
             exit $EXIT
           fi
+      - name: Report offline failure via gh
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -n 500 "${RUNNER_TEMP}/offline.log" > /tmp/fail.log 2>&1 || true
+          echo "=== fail.log ===" >> /tmp/fail.log
+          grep -E "FAILED|failed|error" "${RUNNER_TEMP}/offline.log" | tail -n 200 >> /tmp/fail.log || true
+          gh issue create --title "ci offline failed ${GITHUB_SHA:0:7} ${{ matrix.os }}" --body-file /tmp/fail.log || true
       - name: Check performance baseline budgets (offline)
         shell: bash
         run: cargo test --locked --offline --test performance_baseline -- --nocapture
@@ -60,6 +70,14 @@ jobs:
         run: |
           set -o pipefail
           cargo test --locked --offline -- --nocapture 2>&1 | tee "${RUNNER_TEMP}/offline_pg.log"
+      - name: Report PG offline failure via gh
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -n 500 "${RUNNER_TEMP}/offline_pg.log" > /tmp/fail_pg.log 2>&1 || true
+          gh issue create --title "ci PG offline failed ${GITHUB_SHA:0:7} pg${{ matrix.postgres }}" --body-file /tmp/fail_pg.log || true
       - name: Test with connector enabled
         shell: bash
         run: cargo test --locked --offline --features postgres -- --nocapture
