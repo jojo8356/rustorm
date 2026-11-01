@@ -1,6 +1,5 @@
 name: Rust tests
 on: [push, pull_request]
-permissions: write-all
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,31 +20,7 @@ jobs:
           cargo update || true
           cargo fetch || true
       - name: Test without optional connector
-        run: |
-          set -o pipefail
-          cargo test --locked --offline -- --nocapture 2>&1 | tee /tmp/offline.log
-          code=${PIPESTATUS[0]}
-          if [ $code -ne 0 ]; then
-            echo "### offline failure log" >> $GITHUB_STEP_SUMMARY
-            cat /tmp/offline.log | head -n 500 >> $GITHUB_STEP_SUMMARY || true
-            exit $code
-          fi
-      - name: Report offline log on failure
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            let log = '';
-            try { log = fs.readFileSync('/tmp/offline.log', 'utf8'); } catch(e) { log = 'no log file: ' + e.message; }
-            // post tail where failures are, not head
-            const body = log.length > 60000 ? log.substring(log.length - 60000) : log;
-            await github.rest.issues.create({
-              owner: 'jojo8356',
-              repo: 'rustorm',
-              title: `CI log ${process.env.GITHUB_RUN_ID}`,
-              body: body
-            });
+        run: cargo test --locked --offline -- --nocapture
       - name: Test with connector enabled
         run: cargo test --locked --offline --features postgres -- --nocapture
       - name: Test with sqlx connector enabled
