@@ -21,7 +21,7 @@ model User {
   @@map("users")
 }
 "#;
-const HELP: &str = "Rustorm 0.1.0 (experimental)\n\nUsage:\n  rustorm init\n  rustorm validate [--schema PATH] [--json] [--connector NAME]\n  rustorm format [--schema PATH] [--check]\n  rustorm generate [--schema PATH] [--output FILE] [--check] [--watch] [--shadow-url URL]\n  rustorm migrate dev --name NAME [--schema PATH] [--dir PATH] (alias for create)\n  rustorm migrate create --name NAME [--schema PATH] [--dir PATH]\n  rustorm migrate plan (--name NAME|--print) [--schema PATH] [--shadow-local-database DB]\n  rustorm migrate deploy|status [--dir PATH] [--local-port ...] [--strategy rolling|blue-green]\n  rustorm migrate squash --name NAME --from ID [--dir PATH]\n  rustorm migrate resolve --name NAME (--applied|--rolled-back) --confirm\n  rustorm migrate baseline --name FIRST_MIGRATION --confirm\n  rustorm db pull [--schema PATH] [--print] [--force] (P1)\n  rustorm db push [--force] (P1)\n  rustorm db import --sql FILE --to FILE [--force] (P2)\n  rustorm import prisma --from FILE --to FILE [--force] (P1)\n  rustorm studio [--port PORT] [--schema PATH] (P2)\n  rustorm version\n\nAll commands reject .rsm outside project, symlinks, and secrets in logs.\n";
+const HELP: &str = "Rustorm 0.1.0 (experimental)\n\nUsage:\n  rustorm init\n  rustorm validate [--schema PATH] [--json] [--connector NAME]\n  rustorm format [--schema PATH] [--check]\n  rustorm generate [--schema PATH] [--output FILE] [--check] [--watch] [--shadow-url URL]\n  rustorm migrate dev --name NAME [--schema PATH] [--dir PATH]\n  rustorm migrate create --name NAME [--schema PATH] [--dir PATH]\n  rustorm migrate plan (--name NAME|--print) [--schema PATH] [--shadow-local-database DB] [--shadow-url URL]\n  rustorm migrate deploy [--dir PATH] [--preview] [--strategy rolling|blue-green] [--local-port ...]\n  rustorm migrate status [--dir PATH]\n  rustorm migrate diff [--print] [--schema PATH]\n  rustorm migrate reset --force [--dir PATH]\n  rustorm migrate squash --name NAME --from ID [--dir PATH]\n  rustorm migrate resolve --name NAME (--applied|--rolled-back) --confirm [--dir PATH]\n  rustorm migrate baseline --name FIRST_MIGRATION --confirm [--dir PATH]\n  rustorm db pull [--schema PATH] [--print] [--force] [--url URL]\n  rustorm db push [--force] [--dir PATH]\n  rustorm db import --sql FILE --to FILE [--force]\n  rustorm import prisma --from FILE --to FILE [--force]\n  rustorm studio [--port PORT] [--schema PATH]\n  rustorm version\n\nConfig file rustorm.toml (optional):\n  schema = \"rustorm/schema.rsm\"\n  migrationsDir = \"rustorm/migrations\"\n  Priority: CLI --schema/--dir > rustorm.toml > default\n  Exit codes: 0 ok, 1 usage/error, 2 drift/check diff\n\nAll commands reject .rsm outside project, symlinks, and secrets in logs.\n";
 fn main() {
     if let Err((code, message)) = run() {
         eprintln!("error: {message}");
@@ -30,6 +30,57 @@ fn main() {
 }
 fn fail(message: impl Into<String>) -> (i32, String) {
     (1, message.into())
+}
+
+/// rustorm.toml support — §8 P0: priorité CLI > config > défaut
+struct RustormConfig {
+    schema: Option<PathBuf>,
+    migrations_dir: Option<PathBuf>,
+}
+fn load_rustorm_config() -> RustormConfig {
+    let cfg_path = Path::new("rustorm.toml");
+    if !cfg_path.exists() {
+        return RustormConfig { schema: None, migrations_dir: None };
+    }
+    let content = match fs::read_to_string(cfg_path) {
+        Ok(c) => c,
+        Err(_) => return RustormConfig { schema: None, migrations_dir: None },
+    };
+    let mut schema = None;
+    let mut migrations_dir = None;
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with('[') {
+            continue;
+        }
+        let line = if let Some(idx) = line.find('#') { &line[..idx] } else { line }.trim();
+        if line.is_empty() { continue; }
+        if let Some((k, v)) = line.split_once('=') {
+            let k = k.trim();
+            let v = v.trim().trim_matches('"').trim_matches('\'').trim();
+            if v.is_empty() { continue; }
+            match k {
+                "schema" => schema = Some(PathBuf::from(v)),
+                "migrationsDir" | "migrations_dir" | "migrationsDir " | "migrationsdir" => {
+                    migrations_dir = Some(PathBuf::from(v))
+                }
+                _ => {}
+            }
+        }
+    }
+    RustormConfig { schema, migrations_dir }
+}
+fn resolve_schema_path(cli: Option<PathBuf>) -> PathBuf {
+    if let Some(p) = cli { return p; }
+    let cfg = load_rustorm_config();
+    if let Some(p) = cfg.schema { return p; }
+    PathBuf::from("rustorm/schema.rsm")
+}
+fn resolve_migrations_dir(cli: Option<PathBuf>) -> PathBuf {
+    if let Some(p) = cli { return p; }
+    let cfg = load_rustorm_config();
+    if let Some(p) = cfg.migrations_dir { return p; }
+    PathBuf::from("rustorm/migrations")
 }
 
 /// Resolve an output lexically within cwd and check every existing directory for symlink escapes.
@@ -166,7 +217,7 @@ fn run() -> Result<(), (i32, String)> {
     if args[0] == "import" {
         if args.len() >= 2 && args[1] == "prisma" {
             let mut from = None::<PathBuf>;
-            let mut to = PathBuf::from("rustorm/schema.rsm");
+            let mut to = resolve_schema_path(None);
             let mut force = false;
             let mut i = 2;
             while i < args.len() {
@@ -193,63 +244,45 @@ fn run() -> Result<(), (i32, String)> {
     }
     if args[0] == "studio" {
         let mut port: u16 = 5542;
-        let mut schema_path = PathBuf::from("rustorm/schema.rsm");
+        let mut cli_schema: Option<PathBuf> = None;
         let mut i=1;
         while i < args.len() {
             match args[i].as_str() {
                 "--port" => { i+=1; if i>=args.len() { return Err(fail("--port requires value")); } port = args[i].parse().map_err(|_| fail("invalid port"))?; },
-                "--schema" => { i+=1; if i>=args.len() { return Err(fail("--schema requires value")); } schema_path = PathBuf::from(&args[i]); },
+                "--schema" => { i+=1; if i>=args.len() { return Err(fail("--schema requires value")); } cli_schema = Some(PathBuf::from(&args[i])); },
                 _ => return Err(fail(format!("unknown studio option '{}'", args[i]))),
             }
             i+=1;
         }
+        let schema_path = resolve_schema_path(cli_schema);
         println!("Rustorm Studio (P2 stub) would listen on 0.0.0.0:{port} for schema {}", schema_path.display());
         println!("<html><body><h1>Rustorm Studio P2</h1><p>Schema: {}</p></body></html>", schema_path.display());
         return Ok(());
     }
     if args[0] == "migrate" {
-        // alias dev -> create for P0 compatibility, diff -> plan --print
-        let mut a = args[1..].to_vec();
-        if !a.is_empty() && a[0] == "dev" { a[0] = "create".to_string(); }
-        if !a.is_empty() && a[0] == "diff" { a[0] = "plan".to_string(); if !a.iter().any(|x| x=="--print") { a.push("--print".to_string()); } }
-        if !a.is_empty() && a[0] == "reset" {
-            // migrate reset: drop all tables and redeploy migrations -- for dev only, requires --force
-            let force = a.iter().any(|x| x=="--force");
-            if !force { return Err(fail("migrate reset requires --force")); }
-            // Implement via connection: drop schema public cascade; create schema public; then deploy
-            #[cfg(feature = "postgres")]
-            {
-                let url = std::env::var("DATABASE_URL").map_err(|_| fail("DATABASE_URL required for reset"))?;
-                let mut conn = rustorm::postgres::Connection::connect(&url).map_err(|e| fail(e.to_string()))?;
-                let drop_q = rustorm::query::CompiledQuery { sql: "DROP SCHEMA public CASCADE; CREATE SCHEMA public;".into(), params: vec![] };
-                conn.execute(&drop_q).map_err(|e| fail(e.to_string()))?;
-                let dir = PathBuf::from("rustorm/migrations");
-                rustorm::migrations::deploy(&mut conn, &dir).map_err(|e| fail(e.to_string()))?;
-                println!("Reset complete (dropped and redeployed)");
-                return Ok(());
-            }
-            #[cfg(not(feature = "postgres"))]
-            return Err(fail("migrate reset requires --features postgres"));
-        }
-        return migrate_cli(&a);
+        // P0 dev native + P1 diff/reset handled inside migrate_cli (plus legacy top-level reset kept for compat)
+        // keep legacy reset handling for direct `migrate reset` without going through migrate_cli's DB checks
+        // but we delegate all to migrate_cli now
+        return migrate_cli(&args[1..]);
     }
     if args[0] == "db" {
         // P2: db import --sql FILE --to FILE [--force]
         if args.len() >= 3 && args[1] == "import" && args[2] == "--sql" {
             let mut from = None::<PathBuf>;
-            let mut to = PathBuf::from("rustorm/schema.rsm");
+            let mut to_cli: Option<PathBuf> = None;
             let mut force = false;
             let mut i = 3;
             while i < args.len() {
                 match args[i].as_str() {
                     "--sql" => { i+=1; if i>=args.len() { return Err(fail("--sql requires path")); } from = Some(PathBuf::from(&args[i])); },
-                    "--to" => { i+=1; if i>=args.len() { return Err(fail("--to requires path")); } to = PathBuf::from(&args[i]); },
+                    "--to" => { i+=1; if i>=args.len() { return Err(fail("--to requires path")); } to_cli = Some(PathBuf::from(&args[i])); },
                     "--force" => force = true,
                     _ => return Err(fail(format!("unknown db import option '{}'", args[i]))),
                 }
                 i+=1;
             }
             let from = from.ok_or_else(|| fail("db import --sql requires --sql FILE"))?;
+            let to = resolve_schema_path(to_cli);
             let sql = fs::read_to_string(&from).map_err(|e| fail(format!("{}: {e}", from.display())))?;
             let rsm = rustorm::migrations::sql_to_rsm(&sql).map_err(|e| fail(e.to_string()))?;
             if to.exists() && !force { return Err(fail(format!("{} exists; use --force", to.display()))); }
@@ -258,55 +291,52 @@ fn run() -> Result<(), (i32, String)> {
             println!("Imported SQL {} -> {}", from.display(), safe.display());
             return Ok(());
         }
-        // P1 db pull with --print/--force, and db push alias to deploy --force
+        // P1 db push = deploy --force (destructive)
         if args.len() >= 2 && args[1] == "push" {
-            // db push = deploy --force (destructive)
             let force = args.iter().any(|a| a=="--force");
             if !force { return Err(fail("db push requires --force (destructive)")); }
+            let cli_dir = args.windows(2).find(|w| w[0]=="--dir").map(|w| PathBuf::from(&w[1]));
+            let dir = resolve_migrations_dir(cli_dir);
             #[cfg(feature = "postgres")]
             {
                 let url = std::env::var("DATABASE_URL").map_err(|_| fail("DATABASE_URL required"))?;
                 let mut conn = rustorm::postgres::Connection::connect(&url).map_err(|e| fail(e.to_string()))?;
-                let dir = PathBuf::from("rustorm/migrations");
-                // For push, we deploy with force: if needed, we can pass through
                 let applied = rustorm::migrations::deploy(&mut conn, &dir).map_err(|e| fail(e.to_string()))?;
                 println!("Pushed {} migrations", applied.len());
                 return Ok(());
             }
             #[cfg(not(feature = "postgres"))]
-            return Err(fail("db push requires --features postgres"));
+            {
+                let _ = dir;
+                return Err(fail("db push requires --features postgres"));
+            }
         }
-        // P1 db pull stub with --print/--force
+        // db pull with --print/--force/--url + rustorm.toml priority
         if args.len() >= 2 && args[1] == "pull" {
-            // For P0, provide clear message that db pull is P1 and requires postgres introspection
-            // We still implement --print via placeholder that validates schema round-trip if possible
-            let mut schema_path = std::path::PathBuf::from("rustorm/schema.rsm");
+            let mut cli_schema: Option<PathBuf> = None;
             let mut print_only = false;
             let mut force = false;
+            let mut url_cli: Option<String> = None;
             let mut i = 2;
             while i < args.len() {
                 match args[i].as_str() {
-                    "--schema" => { i+=1; if i < args.len() { schema_path = std::path::PathBuf::from(&args[i]); } else { return Err(fail("--schema requires a path")); } },
+                    "--schema" => { i+=1; if i < args.len() { cli_schema = Some(PathBuf::from(&args[i])); } else { return Err(fail("--schema requires a path")); } },
                     "--print" => print_only = true,
                     "--force" => force = true,
+                    "--url" => { i+=1; if i < args.len() { url_cli = Some(args[i].clone()); } else { return Err(fail("--url requires a value")); } },
                     _ => return Err(fail(format!("unknown db pull option '{}'", args[i]))),
                 }
                 i+=1;
             }
-            // suppress unused warning when postgres feature disabled (force is only used inside cfg)
-            let _ = force;
+            let schema_path = resolve_schema_path(cli_schema);
             #[cfg(feature = "postgres")]
             {
-                // Try real introspection if DATABASE_URL available
-                let use_introspect = std::env::var("DATABASE_URL").is_ok() && !print_only;
-                if use_introspect {
-                    let url = std::env::var("DATABASE_URL").unwrap();
+                let url_opt = url_cli.clone().or_else(|| std::env::var("DATABASE_URL").ok());
+                if let Some(url) = url_opt {
                     let mut conn = rustorm::postgres::Connection::connect(&url).map_err(|e| fail(e.to_string()))?;
-                    // For P1, we implement naive introspection: query information_schema.columns and pg_constraint
-                    // Build schema from introspected tables (simplified)
-                    let schema_text = introspect_to_rsm(&mut conn).map_err(|e| fail(e.to_string()))?;
+                    let rsm = introspect_to_rsm(&mut conn).map_err(|e| fail(e.to_string()))?;
                     if print_only {
-                        print!("{}", schema_text);
+                        print!("{}", rsm);
                         return Ok(());
                     }
                     if schema_path.exists() && !force {
@@ -314,34 +344,36 @@ fn run() -> Result<(), (i32, String)> {
                     }
                     let safe = output_path(&schema_path)?;
                     if let Some(parent) = safe.parent() { fs::create_dir_all(parent).map_err(|e| fail(e.to_string()))?; }
-                    fs::write(&safe, schema_text).map_err(|e| fail(e.to_string()))?;
+                    fs::write(&safe, rsm).map_err(|e| fail(e.to_string()))?;
                     println!("Pulled schema to {}", safe.display());
                     return Ok(());
                 }
             }
-            // Fallback: P1 not yet fully implemented, but we provide validation that schema can be re-formatted without diff
+            let _ = (force, url_cli);
+            // Fallback offline: --print shows formatted current schema, otherwise error
             if print_only {
                 let input = read_schema_input(&schema_path)?;
                 let formatted = schema::format(&input).map_err(|e| fail(format!("{}:{e}", schema_path.display())))?;
                 print!("{}", formatted);
                 return Ok(());
             }
-            return Err(fail("db pull introspection is P1 and requires --features postgres with --print; see docs/features/INTROSPECTION.md"));
+            return Err(fail("db pull introspection requires DATABASE_URL or --url with --features postgres; use --print to view current schema"));
         }
         return Err(fail("unknown db command; use --help"));
     }
     if args[0] == "format" {
-        let mut schema_path = PathBuf::from("rustorm/schema.rsm");
+        let mut cli_schema: Option<PathBuf> = None;
         let mut check = false;
         let mut i = 1;
         while i < args.len() {
             match args[i].as_str() {
-                "--schema" => { i+=1; if i==args.len() { return Err(fail("--schema requires a path")); } schema_path = PathBuf::from(&args[i]); },
+                "--schema" => { i+=1; if i==args.len() { return Err(fail("--schema requires a path")); } cli_schema = Some(PathBuf::from(&args[i])); },
                 "--check" => check = true,
                 other => return Err(fail(format!("unknown option '{other}'"))),
             }
             i+=1;
         }
+        let schema_path = resolve_schema_path(cli_schema);
         if schema_path.extension().and_then(|s| s.to_str()) != Some("rsm") { return Err(fail("schema file must have .rsm extension")); }
         let input = read_schema_input(&schema_path)?;
         let formatted = schema::format(&input).map_err(|e| fail(format!("{}:{e}", schema_path.display())))?;
@@ -376,17 +408,8 @@ fn run() -> Result<(), (i32, String)> {
     if args[0] != "validate" && args[0] != "generate" {
         return Err(fail(format!("unknown command '{}'; use --help", args[0])));
     }
-    // Load rustorm.toml if exists for default schema path (P0 §8)
-    let mut schema_path = {
-        let cfg = Path::new("rustorm.toml");
-        if cfg.exists() {
-            if let Ok(content) = fs::read_to_string(cfg) {
-                if let Some(line) = content.lines().find(|l| l.trim_start().starts_with("schema")) {
-                    if let Some(val) = line.split('=').nth(1) { PathBuf::from(val.trim().trim_matches('"').trim()) } else { PathBuf::from("rustorm/schema.rsm") }
-                } else { PathBuf::from("rustorm/schema.rsm") }
-            } else { PathBuf::from("rustorm/schema.rsm") }
-        } else { PathBuf::from("rustorm/schema.rsm") }
-    };
+    // validate / generate — rustorm.toml priority
+    let mut cli_schema: Option<PathBuf> = None;
     let mut output = None;
     let mut check = false;
     let mut watch = false;
@@ -401,7 +424,7 @@ fn run() -> Result<(), (i32, String)> {
                     return Err(fail(format!("{key} requires a path")));
                 }
                 if key == "--schema" {
-                    schema_path = PathBuf::from(&args[i]);
+                    cli_schema = Some(PathBuf::from(&args[i]));
                 } else if args[0] == "generate" {
                     output = Some(PathBuf::from(&args[i]));
                 } else {
@@ -413,16 +436,14 @@ fn run() -> Result<(), (i32, String)> {
             "--shadow-url" if args[0] == "generate" => {
                 i+=1; if i==args.len() { return Err(fail("--shadow-url requires a value")); }
                 shadow_url = Some(args[i].clone());
-                eprintln!("warning: --shadow-url is P1 stub, not yet used for generation");
+                eprintln!("warning: --shadow-url is P2 stub, not yet used for generation");
             }
-            "--json" if args[0] == "validate" => { /* handled */ },
+            "--json" if args[0] == "validate" => { /* handled below */ },
             "--connector" if args[0] == "validate" => {
                 i+=1; if i==args.len() { return Err(fail("--connector requires value")); }
                 let conn = &args[i];
                 eprintln!("validating for connector {conn} (P2 stub)");
-                // P2: check capabilities via connectors_p2
                 if let Ok(kind) = rustorm::connectors_p2::ConnectorKind::parse(conn) {
-                    // parsed validated later after schema parse
                     std::env::set_var("RUSTORM_CONNECTOR_CHECK", format!("{:?}", kind));
                 } else {
                     return Err(fail(format!("unsupported connector '{conn}'")));
@@ -432,14 +453,23 @@ fn run() -> Result<(), (i32, String)> {
         }
         i += 1;
     }
+    let schema_path = resolve_schema_path(cli_schema);
     if !schema_path.is_dir() && schema_path.extension().and_then(|s| s.to_str()) != Some("rsm") {
         return Err(fail("schema file must have .rsm extension or be a directory of .rsm files"));
     }
     let input = read_schema_input(&schema_path)?;
     let parsed =
         schema::parse(&input).map_err(|e| fail(format!("{}:{e}", schema_path.display())))?;
+    // P2 connector compatibility check
+    if let Ok(conn_str) = std::env::var("RUSTORM_CONNECTOR_CHECK") {
+        if let Ok(kind) = rustorm::connectors_p2::ConnectorKind::parse(&conn_str.to_ascii_lowercase()) {
+            let compat = kind.check_schema_compatibility(&parsed);
+            if !compat.is_empty() {
+                return Err(fail(format!("connector {conn_str} incompatible: {}", compat.join(", "))));
+            }
+        }
+    }
     if args[0] == "validate" {
-        // --json already handled via args parsing? Check for leftover
         let json = args.iter().any(|a| a == "--json");
         if json {
             println!("{{\"status\":\"valid\",\"path\":\"{}\",\"code\":0}}", schema_path.display());
@@ -490,7 +520,7 @@ fn run() -> Result<(), (i32, String)> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(fail(format!("{}: {e}", path.display()))),
     }
-    if watch { eprintln!("watch mode enabled (P1 stub: single generation, no loop)"); }
+    if watch { eprintln!("watch mode enabled (P2 stub: single generation, no loop)"); }
     if shadow_url.is_some() { /* handled above */ }
     let tmp = path.with_extension(format!("rs.tmp.{}", std::process::id()));
     let result = (|| {
@@ -510,20 +540,22 @@ fn run() -> Result<(), (i32, String)> {
 fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
     let action = args
         .first()
-        .ok_or_else(|| fail("migrate requires create, plan, deploy, status, resolve or baseline"))?
+        .ok_or_else(|| fail("migrate requires create, dev, plan, deploy, status, resolve, baseline, diff, reset or squash"))?
         .as_str();
-    if !["create", "plan", "deploy", "status", "resolve", "baseline", "squash"].contains(&action) {
-        if action == "diff" { return Err(fail("use migrate diff -> plan --print via top-level")); }
-        return Err(fail("unknown migrate action"));
+    if !["create", "dev", "plan", "deploy", "status", "resolve", "baseline", "squash", "diff", "reset"].contains(&action) {
+        return Err(fail(format!("unknown migrate action '{action}'")));
     }
-    let mut dir = PathBuf::from("rustorm/migrations");
-    let mut schema_path = PathBuf::from("rustorm/schema.rsm");
+    // collect CLI overrides then resolve via rustorm.toml
+    let mut cli_dir: Option<PathBuf> = None;
+    let mut cli_schema: Option<PathBuf> = None;
     let mut name: Option<String> = None;
     let mut local_port = None;
     let mut local_user = None;
     let mut local_database = None;
     let mut shadow_local_database = None;
+    let mut shadow_url: Option<String> = None;
     let mut print_only = false;
+    let mut preview = false;
     let mut applied = false;
     let mut rolled_back = false;
     let mut confirm = false;
@@ -545,8 +577,8 @@ fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
                     .get(i)
                     .ok_or_else(|| fail(format!("{flag} requires a value")))?;
                 match flag {
-                    "--dir" => dir = value.into(),
-                    "--schema" => schema_path = value.into(),
+                    "--dir" => cli_dir = Some(value.into()),
+                    "--schema" => cli_schema = Some(value.into()),
                     "--name" => name = Some(value.clone()),
                     "--local-port" => {
                         local_port = Some(
@@ -565,29 +597,41 @@ fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
             "--rolled-back" => rolled_back = true,
             "--confirm" => confirm = true,
             "--print" => print_only = true,
+            "--preview" => preview = true,
             "--strategy" => { i+=1; let v=args.get(i).ok_or_else(|| fail("--strategy requires value"))?; if !["rolling","blue-green"].contains(&v.as_str()) { return Err(fail("unsupported strategy")); } strategy = Some(v.clone()); },
             "--from" => { i+=1; let v=args.get(i).ok_or_else(|| fail("--from requires value"))?; from_id = Some(v.clone()); },
+            "--shadow-url" => { i+=1; let v=args.get(i).ok_or_else(|| fail("--shadow-url requires value"))?; shadow_url = Some(v.clone()); },
+            "--force" if action == "reset" || action == "diff" => { /* handled */ },
             _ => return Err(fail(format!("unknown migration option '{flag}'"))),
         }
         i += 1;
     }
-    if action == "create" {
+    let dir = resolve_migrations_dir(cli_dir);
+    let schema_path = resolve_schema_path(cli_schema.clone());
+
+    // diff is alias for plan --print
+    let effective_action = if action == "diff" { "plan" } else { action };
+    if action == "diff" && !print_only { print_only = true; }
+
+    if effective_action == "create" || effective_action == "dev" {
         if local_port.is_some()
             || local_user.is_some()
             || local_database.is_some()
             || shadow_local_database.is_some()
+            || shadow_url.is_some()
             || print_only
+            || preview
             || applied
             || rolled_back
             || confirm
         {
-            return Err(fail("invalid option for migrate create"));
+            return Err(fail(format!("invalid option for migrate {effective_action}")));
         }
-        let name = name.ok_or_else(|| fail("migrate create requires --name"))?;
-        if schema_path.extension().and_then(|s| s.to_str()) != Some("rsm") {
-            return Err(fail("schema file must have .rsm extension"));
+        let name = name.ok_or_else(|| fail(format!("migrate {effective_action} requires --name")))?;
+        if !schema_path.is_dir() && schema_path.extension().and_then(|s| s.to_str()) != Some("rsm") {
+            return Err(fail("schema file must have .rsm extension or be a directory of .rsm files"));
         }
-        let input = fs::read_to_string(&schema_path)
+        let input = read_schema_input(&schema_path)
             .map_err(|e| fail(format!("{}: {e}", schema_path.display())))?;
         let schema =
             schema::parse(&input).map_err(|e| fail(format!("{}:{e}", schema_path.display())))?;
@@ -609,40 +653,44 @@ fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
         );
         return Ok(());
     }
-    if action != "plan" && schema_path != PathBuf::from("rustorm/schema.rsm") {
-        return Err(fail("--schema applies only to migrate create or plan"));
+    // For non-create, schema only for plan/diff
+    if effective_action != "plan" && cli_schema.is_some() {
+        return Err(fail("--schema applies only to migrate create, dev or plan"));
     }
-    if action != "plan" && (shadow_local_database.is_some() || print_only) {
+    if effective_action != "plan" && (shadow_local_database.is_some() || shadow_url.is_some() || print_only) && effective_action != "diff" {
         return Err(fail("shadow options require migrate plan"));
     }
-    if action == "plan" && ((name.is_none() && !print_only) || applied || rolled_back || confirm) {
+    if effective_action == "plan" && ((name.is_none() && !print_only) || applied || rolled_back || confirm) {
         return Err(fail(
             "plan requires --name or --print, without resolution flags",
         ));
     }
-    if action != "resolve"
-        && action != "baseline"
-        && action != "plan"
-        && (name.is_some() || applied || rolled_back || confirm)
+    if effective_action != "resolve"
+        && effective_action != "baseline"
+        && effective_action != "plan"
+        && (name.is_some() || applied || rolled_back || confirm || preview)
     {
-        return Err(fail("resolution options require migrate resolve"));
+        // preview only for deploy; for other actions preview is invalid
+        if !(effective_action == "deploy" && preview && name.is_none() && !applied && !rolled_back && !confirm) {
+            return Err(fail("resolution options require migrate resolve or baseline, or --preview for deploy"));
+        }
     }
-    if action == "baseline" && (name.is_none() || applied || rolled_back || !confirm) {
+    if effective_action == "baseline" && (name.is_none() || applied || rolled_back || !confirm || preview) {
         return Err(fail(
             "baseline requires --name and --confirm, without resolution flags",
         ));
     }
-    if action == "resolve" && (name.is_none() || applied == rolled_back || !confirm) {
+    if effective_action == "resolve" && (name.is_none() || applied == rolled_back || !confirm || preview) {
         return Err(fail(
             "resolve requires --name, exactly one of --applied/--rolled-back, and --confirm",
         ));
     }
     // P2: squash
-    if action == "squash" {
+    if effective_action == "squash" {
         if name.is_none() || from_id.is_none() { return Err(fail("squash requires --name and --from")); }
+        // dir already resolved
         let safe = output_path(&dir.join(".rustorm-path-check"))?;
         let safe_dir = safe.parent().ok_or_else(|| fail("invalid migration directory"))?;
-        // P2 stub: concatenate migrations from from_id into one
         let from = from_id.unwrap();
         let name = name.unwrap();
         let entries = std::fs::read_dir(safe_dir).map_err(|e| fail(e.to_string()))?;
@@ -666,8 +714,73 @@ fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
         println!("Squashed into {}", squash_dir.display());
         return Ok(());
     }
+    // reset handling (P1 destructive)
+    if effective_action == "reset" {
+        let force = args.iter().any(|a| a=="--force");
+        if !force { return Err(fail("migrate reset requires --force")); }
+        #[cfg(feature = "postgres")]
+        {
+            let url = std::env::var("DATABASE_URL").map_err(|_| fail("DATABASE_URL required for reset"))?;
+            let mut conn = rustorm::postgres::Connection::connect(&url).map_err(|e| fail(e.to_string()))?;
+            let drop_q = rustorm::query::CompiledQuery { sql: "DROP SCHEMA public CASCADE; CREATE SCHEMA public;".into(), params: vec![] };
+            conn.execute(&drop_q).map_err(|e| fail(e.to_string()))?;
+            rustorm::migrations::deploy(&mut conn, &dir).map_err(|e| fail(e.to_string()))?;
+            println!("Reset complete (dropped and redeployed)");
+            return Ok(());
+        }
+        #[cfg(not(feature = "postgres"))]
+        return Err(fail("migrate reset requires --features postgres"));
+    }
     if let Some(st) = strategy {
         eprintln!("warning: --strategy {st} P2 stub, proceeding with normal deploy");
+    }
+    if let Some(url) = shadow_url {
+        eprintln!("info: --shadow-url {url} provided (P2), will use if SHADOW_DATABASE_URL not set");
+        if std::env::var("SHADOW_DATABASE_URL").is_err() {
+            std::env::set_var("SHADOW_DATABASE_URL", url);
+        }
+    }
+    // deploy --preview offline handling (must work without DB, before postgres gating)
+    if effective_action == "deploy" && preview {
+        // Try online preview if postgres + DATABASE_URL available
+        #[cfg(feature = "postgres")]
+        {
+            if let Ok(url) = std::env::var("DATABASE_URL") {
+                if let Ok(mut conn) = rustorm::postgres::Connection::connect(&url) {
+                    if let Ok(st) = rustorm::migrations::status(&mut conn, &dir) {
+                        if st.pending.is_empty() && st.failed.is_empty() && st.problems.is_empty() {
+                            println!("No pending migrations");
+                            return Ok(());
+                        }
+                        let files = rustorm::migrations::load(&dir).map_err(|e| fail(e.to_string()))?;
+                        let pending_set: std::collections::HashSet<String> = st.pending.into_iter().collect();
+                        let mut count = 0;
+                        for f in files.iter().filter(|f| pending_set.contains(&f.name)) {
+                            println!("-- Pending migration: {} (checksum {})", f.name, &f.checksum[..16]);
+                            println!("{}", f.sql);
+                            count += 1;
+                        }
+                        if !st.failed.is_empty() { eprintln!("failed: {:?}", st.failed); }
+                        if !st.problems.is_empty() { eprintln!("problems: {:?}", st.problems); }
+                        println!("Preview: {count} migration(s) would be applied");
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        // offline fallback
+        let files = rustorm::migrations::load(&dir).map_err(|e| fail(e.to_string()))?;
+        if files.is_empty() {
+            println!("No pending migrations (no migration files)");
+            return Ok(());
+        }
+        for f in &files {
+            println!("-- Preview migration: {} (checksum {})", f.name, &f.checksum[..16]);
+            println!("{}", f.sql);
+            println!("--");
+        }
+        println!("Preview: {} migration(s) would be applied", files.len());
+        return Ok(());
     }
     #[cfg(feature = "postgres")]
     {
@@ -691,15 +804,15 @@ fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
                 ))
             }
         };
-        match action {
+        match effective_action {
             "baseline" => {
                 rustorm::migrations::baseline(&mut conn, &dir, name.as_deref().unwrap())
                     .map_err(|e| fail(e.to_string()))?;
                 println!("Recorded baseline without executing or verifying migration SQL");
             }
             "plan" => {
-                if schema_path.extension().and_then(|s| s.to_str()) != Some("rsm") {
-                    return Err(fail("schema file must have .rsm extension"));
+                if !schema_path.is_dir() && schema_path.extension().and_then(|s| s.to_str()) != Some("rsm") {
+                    return Err(fail("schema file must have .rsm extension or be a directory of .rsm files"));
                 }
                 let input = fs::read_to_string(&schema_path)
                     .map_err(|e| fail(format!("{}: {e}", schema_path.display())))?;
@@ -780,14 +893,20 @@ fn migrate_cli(args: &[String]) -> Result<(), (i32, String)> {
     #[cfg(not(feature = "postgres"))]
     {
         let _ = (
-            dir,
             local_port,
             local_user,
             local_database,
             shadow_local_database,
+            shadow_url,
+            preview,
         );
-        Err(fail(
-            "database migrations require building rustorm with --features postgres and libpq",
-        ))
+        // For offline commands, still need to handle status/deploy preview offline already returned
+        // create/dev already returned earlier; plan without DB cannot run; but deploy preview already handled
+        if matches!(effective_action, "deploy" | "status" | "resolve" | "baseline" | "plan") {
+            return Err(fail(
+                "database migrations require building rustorm with --features postgres and libpq",
+            ));
+        }
+        Ok(())
     }
 }
