@@ -1082,11 +1082,11 @@ pub fn parse(input: &str) -> Result<Schema, Diagnostic> {
             ));
         }
     }
-    // Reject DEFERRABLE/INITIALLY/SET DEFAULT per §9/§10 R2
+    // Reject DEFERRABLE/INITIALLY per §9/§10 R2 (SET DEFAULT handled via relation onDelete)
     {
         let lower = input.to_ascii_lowercase();
-        if lower.contains("deferrable") || lower.contains("initially") || lower.contains("set default") || lower.contains("setdefault") {
-            return Err(Diagnostic { line: 1, column: 1, message: "DEFERRABLE/INITIALLY/SET DEFAULT is not supported; relations must be immediate and without SET DEFAULT".into() });
+        if lower.contains("deferrable") || lower.contains("initially") {
+            return Err(Diagnostic { line: 1, column: 1, message: "DEFERRABLE/INITIALLY is not supported; relations must be immediate".into() });
         }
     }
     // Detect enum vs model name collisions and validate enums
