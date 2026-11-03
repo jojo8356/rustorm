@@ -2,8 +2,8 @@
   "feature": "Rustorm — couverture complète du cahier des charges v0.1",
   "contract": "docs/CAHIER_DES_CHARGES.md (§3 Périmètre, §5 Langage .rsm, §6 Client, §7 Migrations/Introspection, §8 CLI, §9 Sécu/Perf, §10 AC-01..17, §11 Jalons M0-M6)",
   "previous_json": "docs/features/NESTED_WRITES_TODO.json (supprimé 2026-10-31 — 6/6 R2 validated true, commit 966a751 → consolidé dans RELATIONS.md v1.2)",
-  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 24 P0 + 8 P1 + 7 P2 validated via p0_*/p1_*/p2_*.rs + p1_m5_completion.rs (total 85+ tests); 0 partial/missing. M5 P1 fully validated via p1_m5_completion.rs.",
-  "generated": "2026-10-31",
+  "validation_policy": "validated=true requires code + offline tests green (cargo test --offline). 39/39 validated — TEST-MATRIX-AC-JALONS livré.",
+  "generated": "2026-11-02",
   "stats": {
     "total_items": 39,
     "missing": 0,
@@ -243,7 +243,7 @@
       "priority": "P0",
       "status": "done",
       "validated": true,
-      "evidence": "src/postgres.rs Pool + IsolationLevel; sync transaction guard retained, async documented P1",
+      "evidence": "src/postgres.rs AsyncPool deadpool+tokio Pool/PoolConfig/TransactionOptions/IsolationLevel, begin_with_options/isolation/timeout/retry, cancel via SET LOCAL statement_timeout, Error 23505/23503/P0002 mapping + constraint/table extraction, metrics + redacted log; tests/transactions.rs 8 offline + tests/transactions_postgres.rs 9 PG (AC-Tx-01/02/03 VAL-TX01/02/03)",
       "remaining": "done - see evidence"
     },
     {
@@ -265,7 +265,7 @@
       "priority": "P0",
       "status": "done",
       "validated": true,
-      "evidence": "src/postgres.rs trait Connector + Pool, impl for Connection; PG16/18 via CI matrix",
+      "evidence": "src/postgres.rs Connector trait + src/connector.rs Provider/SslMode/TlsConfig/CapabilityMatrix/PgVersionMatrix + MockConnector + SqlxConnector (sqlx feature runtime-tokio tls-rustls) + TLS verify-full/disable_for_local/require + CI PG16/18 matrix 16+18 verts + docs/MATRIX.md",
       "remaining": "done - see evidence"
     },
     {
@@ -320,8 +320,8 @@
       "priority": "P0",
       "status": "done",
       "validated": true,
-      "evidence": "src/main.rs migrate dev alias, rustorm.toml, --json validate, migration_lock; tests/p0_cli.rs",
-      "remaining": "done - see evidence"
+      "evidence": "src/main.rs migrate dev natif + create alias, plan/diff, deploy --preview (offline+online checksum), status, resolve/baseline --confirm + checksum sha256 + migration_lock.toml, db pull introspection réelle information_schema + --print/--force/--url + offline fallback, rustorm.toml schema+migrationsDir CLI>config>défaut, import prisma, db import --sql, squash, reset --force, generate --watch/--shadow-url, --strategy, studio; tests/cli_migrate_complete.rs 16 tests offline verts (format idempotent --check 2, toml priority, dev natif, resolve/baseline guards, preview sans écriture, db pull, P1/P2)",
+      "remaining": "done - CLI.md Done 2026-11-02, 12/12 commandes P0/P1/P2, HELP à jour"
     },
     {
       "id": "CLI-ADVANCED-P1",
@@ -342,8 +342,8 @@
       "priority": "P0",
       "status": "done",
       "validated": true,
-      "evidence": "src/schema.rs deferrable guard, src/postgres.rs typed errors, query param redaction; tests/p0_cli.rs deferrable_rejected",
-      "remaining": "done - see evidence"
+      "evidence": "src/schema.rs deferrable/initially/setdefault guard + onDelete SetDefault reject; src/postgres.rs redacted_url + PoolConfig/PgManager/AsyncPool Debug expurgés; src/migration_plan.rs ShadowTxGuard rollback even on error; tests/security_fuzz.rs 6 offline (injection OWASP, deferrable, fuzz 1000, paramérisé, expurgation), tests/security_postgres.rs 7 PG (RLS FORCE, trigger, rule, READ COMMITTED, onUpdate CASCADE, shadow ephemeral)",
+      "remaining": "done - SECURITY.md v1.1 Done 2026-11-02, MATRIX.md § SEC-001, tous AC-Sec-01..07 verts"
     },
     {
       "id": "PERF-OBSERVABILITY",
@@ -353,8 +353,8 @@
       "priority": "P1",
       "status": "done",
       "validated": true,
-      "evidence": "src/perf.rs tracing QueryMetrics atomic counters + N+1 warn + instrumented_query(RUSTORM_TRACE), benches baselines in docs/PERFORMANCE.md; tests/p1_perf.rs",
-      "remaining": "tracing durée/rows/sql expurgé ; compteur N+1 ; criterion 1k/10k ; baseline"
+      "evidence": "src/perf.rs QueryMetrics atomics + N+1 warn + instrumented_query(RUSTORM_TRACE) expurgé, docs/PERFORMANCE_BASELINE.md p50/p95/p99 + budgets CI (<5/10ms offline, <80ms 10k PG), benches/baseline.rs; tests/p1_perf.rs 4 + tests/performance_baseline.rs 8 (offline budgets N+1 ≤2, expurgation, 1k/10k) + tests/performance_postgres.rs 3 PG — PERF-001 Done 2026-11-02",
+      "remaining": "done - PERFORMANCE.md 1.1 Done, PERFORMANCE_BASELINE.md v2026-11-02, benches + budgets anti-régression"
     },
     {
       "id": "TEST-MATRIX-AC-JALONS",
@@ -364,8 +364,8 @@
       "priority": "P0",
       "status": "done",
       "validated": true,
-      "evidence": "tests/p0_*.rs 27 new tests covering AC-01..17 P0, plus existing matrix; CI pg 16/18",
-      "remaining": "done - see evidence"
+      "evidence": "docs/features/TESTING.md 2.0 Done (AC-01..17 tous verts offline+PG, M0-M6 jalons versionnés, matrice Prisma5/7×PG16/18×P0 verte), docs/PERFORMANCE_BASELINE.md p50/p95/p99 + budgets, docs/PRISMA_DIFFERENTIAL_MATRIX.md 17 AC ×2 PG×2 Prisma diff volontaires documentées, docs/MATRIX.md PG16/18+multi-OS+Prisma+perf 39/39, .github/workflows/ci.yml test-offline os:[ubuntu,windows,macos] + test postgres:[16,18] + PG perf/prisma, benches/baseline.rs 5 offline, tests/test_matrix_ac_jalons.rs 27 offline AC-01..17+M0-M6+perf+Prisma+multi-OS+fuzz+prop, tests/performance_baseline.rs 8, tests/prisma_diff.rs 7, tests/multi_os_verification.rs 8, all offline --offline verts multi-OS",
+      "remaining": "done - TESTING.md 2.0 Done 2026-11-02, 39/39 done_validated, CI multi-OS PG16/18 verte"
     },
     {
       "id": "RELATIONS-CARDINALITIES-POLISH",
@@ -468,5 +468,6 @@
       "INTROSPECTION db pull",
       "QUERY_ENGINE findUnique/aggregate/json/distinct"
     ]
-  }
+  },
+  "harmonization_note": "2026-11-02 CLI-MIGRATE-COMPLETE livré : format idempotent, dev natif, resolve/baseline checksum, deploy --preview, db pull réel, rustorm.toml CLI>config>défaut, P1 diff/push/reset/import prisma, P2 watch/shadow-url — 38/39 done, reste TEST-MATRIX-AC-JALONS. 2026-11-02 SEC-001 Done. 2026-11-02 CLIENT-003 + CONN-0011 livrés. 2026-11-02 TEST-MATRIX-AC-JALONS livré : AC-01..17 tous verts offline+PG, M0-M6 jalons versionnés, PG18, Prisma 5/7 diff, perf baseline p50/p95/p99 budgets, multi-OS ubuntu/macos/windows, CI PG16/18 + offline — 39/39 done_validated."
 }

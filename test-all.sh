@@ -40,17 +40,20 @@ run_step() {
   echo
 }
 
-echo "rustorm — test-all.sh (P0+P1 M5 + P2)"
+echo "rustorm — test-all.sh (P0+P1 M5 + P2 + TEST-MATRIX-AC-JALONS)"
 echo "port=$PORT user=$USER db=$DB branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?') head=$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
 echo
 
-# 1) offline sans Postgres — toutes suites rapides (P0 24 + P1 8 + P2 7 + M5)
+# 1) offline sans Postgres — toutes suites rapides (P0 24 + P1 8 + P2 7 + M5 + TEST-MATRIX-AC-JALONS 39/39)
 run_step "cargo test --offline (sans Postgres)" cargo test --offline -- --nocapture
+
+# 1a) benches offline (baseline p50/p95/p99 budgets)
+run_step "cargo test --offline --benches -- benches baseline (offline)" cargo test --offline --benches -- --nocapture || run_step "cargo test --offline --bench baseline" cargo test --offline --bench baseline -- --nocapture
 
 # 1b) vérif fine offline par test (permet de localiser P1 M5)
 if [[ $FAILS -eq 0 ]]; then
   info "Vérif fine offline par test (--test)"
-  for t in p0_cli p0_migrations p0_query p0_schema p1_agg_groupby p1_cli_advanced p1_decimal p1_introspection p1_json_filters p1_perf p1_prisma_import p1_relations_polish p1_m5_completion p2_client_example p2_composites p2_connectors p2_extensions p2_migrations p2_multifile p2_tooling p2_views cardinalities cardinalities_postgres composite_primary composite_postgres migrations migrations_postgres named_postgres named_relations nested_connect_or_create nested_create nested_create_postgres nested_disconnect_postgres nested_graph nested_set_ext nested_upsert nested_writes_postgres query postgres relations_postgres shadow_postgres; do
+  for t in p0_cli p0_migrations p0_query p0_schema p1_agg_groupby p1_cli_advanced p1_decimal p1_introspection p1_json_filters p1_perf p1_prisma_import p1_relations_polish p1_m5_completion p2_client_example p2_composites p2_connectors p2_extensions p2_migrations p2_multifile p2_tooling p2_views cardinalities cardinalities_postgres composite_primary composite_postgres migrations migrations_postgres named_postgres named_relations nested_connect_or_create nested_create nested_create_postgres nested_disconnect_postgres nested_graph nested_set_ext nested_upsert nested_writes_postgres query postgres relations_postgres shadow_postgres performance_baseline test_matrix_ac_jalons prisma_diff multi_os_verification prisma_diff_postgres performance_postgres connector_postgres connector_sqlx connector_trait connector_tls security_fuzz security_postgres transactions transactions_postgres; do
     # certains tests n'existent qu'avec --features postgres, on teste sans feature d'abord
     if cargo test --offline --test "$t" -- --nocapture > /tmp/rustorm-test-all-$$.log 2>&1; then
       STEPS=$((STEPS+1)); info "[$STEPS]   --test $t (offline)"; ok "  --test $t"; echo
@@ -84,7 +87,7 @@ run_step "cargo test --offline --features postgres -- --ignored (toutes suites P
 # 3) ciblé par fichier pour un rapport fin (même commande mais détaillé par --test)
 if [[ $FAILS -eq 0 ]]; then
   info "Vérif fine par test Postgres (--test)"
-  for t in cardinalities_postgres composite_postgres migrations_postgres named_postgres nested_create_postgres nested_disconnect_postgres nested_writes_postgres postgres relations_postgres shadow_postgres; do
+  for t in cardinalities_postgres composite_postgres migrations_postgres named_postgres nested_create_postgres nested_disconnect_postgres nested_writes_postgres postgres relations_postgres shadow_postgres transactions_postgres connector_postgres connector_sqlx prisma_diff_postgres performance_postgres security_postgres; do
     run_step "  --test $t" cargo test --offline --features postgres --test "$t" -- --ignored --nocapture
   done
 fi

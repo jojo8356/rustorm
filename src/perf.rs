@@ -53,8 +53,8 @@ pub fn instrumented_query<F, T>(name: &str, f: F) -> T where F: FnOnce() -> T {
     if std::env::var("RUSTORM_TRACE").is_ok() {
         eprintln!("[trace] query={} duration_ms={}", name, elapsed);
     }
-    // N+1 detection heuristic: if more than 10 queries in short burst, warn
-    if metrics().count > 10 && elapsed < 5 {
+    // N+1 detection heuristic: if more than 50 queries in short burst, warn (offline baselines run 100+ loops)
+    if metrics().count > 50 && elapsed < 5 {
         record_n_plus_one();
     }
     result

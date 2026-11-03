@@ -311,8 +311,18 @@ pub fn plan(
             "shadow database must have no user objects in public or additional user schemas".into(),
         ));
     }
-    let mut tx = shadow_guard.conn.begin()?;
-    replay(&mut tx, &files)?;
+    // Shadow DB éphémère — transaction rolled back even on error/panic (§9)
+    struct ShadowTxGuard<'a> { tx: Option<crate::postgres::Transaction<'a>> }
+    impl<'a> Drop for ShadowTxGuard<'a> {
+        fn drop(&mut self) {
+            if let Some(tx) = self.tx.take() {
+                let _ = tx.rollback();
+            }
+        }
+    }
+    let mut guard = ShadowTxGuard { tx: Some(shadow_guard.conn.begin()?) };
+    let tx = guard.tx.as_mut().unwrap();
+    replay(tx, &files)?;
     let extra = tx.query(&query("SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname NOT IN ('public','pg_catalog','information_schema') AND pg_catalog.left(nspname,3) <> 'pg_') AS extra", vec![]))?;
     if extra.len() != 1 || extra[0].get::<bool>("extra")? {
         return Err(Error::Invalid(
@@ -403,7 +413,7 @@ pub fn plan(
         ));
     }
     // Do not rely on Drop for the successful case: report rollback errors.
-    tx.rollback()?;
+    guard.tx.take().unwrap().rollback()?;
     Ok(Plan {
         sql,
         basis: files
